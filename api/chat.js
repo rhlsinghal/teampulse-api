@@ -1,5 +1,8 @@
 export default async function handler(req, res) {
   // ── CORS ──────────────────────────────────────────────────────────────────
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
   // Replace with your exact GitHub Pages URL
   const allowedOrigins = [
     "https://rhlsinghal.github.io",
