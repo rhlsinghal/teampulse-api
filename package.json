@@ -1,0 +1,6 @@
+{
+  "name": "teampulse-api",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Anthropic API proxy for TeamPulse"
+}
