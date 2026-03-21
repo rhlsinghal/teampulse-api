@@ -2,7 +2,7 @@ export default async function handler(req, res) {
   // ── CORS ──────────────────────────────────────────────────────────────────
   // Replace with your exact GitHub Pages URL
   const allowedOrigins = [
-    "https://YOUR-GITHUB-USERNAME.github.io",
+    "https://rhlsinghal.github.io",
     "http://localhost:3000", // for local dev
   ];
   const origin = req.headers.origin || "";
