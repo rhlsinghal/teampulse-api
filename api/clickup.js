@@ -662,22 +662,7 @@ export default async function handler(req, res) {
     const html = buildHtml(sprints,bugTasks,{month:reportMonth,yourName,managerName});
     const sprintNames = sprints.map(s=>s.label);
 
-    // Debug info — helps diagnose task count and date issues
-    const debug = sprints.map(s=>({
-      label:      s.label,
-      totalRaw:   s.all_tasks.length,
-      totalDt:    s.dt_tasks.length,
-      done:       s.done_dt.length,
-      open:       s.open_dt.length,
-      startDate:  s.startDate,
-      dueDate:    s.dueDate,
-      startFmt:   s.startDate ? new Date(s.startDate).toISOString() : null,
-      dueFmt:     s.dueDate   ? new Date(s.dueDate).toISOString()   : null,
-      sampleStatuses: s.dt_tasks.slice(0,5).map(t=>t.status),
-    }));
-    console.log("Sprint debug:", JSON.stringify(debug, null, 2));
-
-    res.status(200).json({html, sprints:sprints.length, bugs:bugTasks.length, month:reportMonth, sprintNames, debug});
+    res.status(200).json({html, sprints:sprints.length, bugs:bugTasks.length, month:reportMonth, sprintNames});
 
   } catch(e){
     console.error("ClickUp error:",e);
