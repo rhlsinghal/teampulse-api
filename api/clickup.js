@@ -1,6 +1,13 @@
 const CU_BASE    = "https://api.clickup.com/api/v2";
 const DT_DOMAINS = new Set(["decision-tree.com"]);
-const CLOSED     = new Set(["closed","completed","done"]);
+const CLOSED = new Set([
+  "closed","completed","done",
+  "complete","resolved","released","deployed","finished","accepted",
+]);
+function isClosed(status) {
+  const s = (status||"").toLowerCase();
+  return CLOSED.has(s) || s.startsWith("done") || s.startsWith("closed") || s.startsWith("complete");
+}
 
 const STATUS_CLASS = {
   "completed":"pill-green","closed":"pill-green",
@@ -61,6 +68,11 @@ function fmtAssignees(assignees) {
   return names.join(", ")+(assignees.length>2?` +${assignees.length-2}`:"");
 }
 
+function fmtDate(ts) {
+  if(!ts) return null;
+  return new Date(ts).toLocaleDateString("en-GB",{day:"numeric",month:"short",year:"numeric"});
+}
+
 function statusPill(status) {
   const cls = STATUS_CLASS[status.toLowerCase()]||"pill-gray";
   const label = status.replace(/ - nectar/gi,"").replace(/ - dt/gi,"");
@@ -88,7 +100,7 @@ function buildHtml(sprints, bugTasks, { month, yourName, managerName }) {
     const cls     = allGood ? "sprint-card completed" : "sprint-card attention";
     const desc    = allGood ? "All DT tasks closed." : `${s.open_dt.length} DT task(s) still open.`;
     const deployTask = s.dt_tasks.find(t => isDeployTask(t.name));
-    const deployDone = deployTask ? CLOSED.has(deployTask.status.toLowerCase()) : null;
+    const deployDone = deployTask ? isClosed(deployTask.status) : null;
     const releasePill = deployDone === true
       ? `<span class="release-pill rp-yes">&#10003; Release on time</span>`
       : deployDone === false
@@ -99,6 +111,7 @@ function buildHtml(sprints, bugTasks, { month, yourName, managerName }) {
       <div class="sprint-type">Completed sprint</div>
       <div class="sprint-name">${s.label}</div>
       <div class="sprint-desc">Product Sprint ${s.num} — ${desc}</div>
+      ${(s.startDate||s.dueDate)?`<div class="sprint-dates">${s.startDate?fmtDate(s.startDate):"?"} → ${s.dueDate?fmtDate(s.dueDate):"?"}</div>`:""}
       <div class="sprint-stats">
         <div class="sstat"><div class="sstat-val dk">${s.dt_tasks.length}</div><div class="sstat-label">Total DT</div></div>
         <div class="sprint-divider"></div>
@@ -130,7 +143,7 @@ function buildHtml(sprints, bugTasks, { month, yourName, managerName }) {
 
     // Task rows — mark open tasks with STILL OPEN tag
     const taskRows = s.dt_tasks.map(t => {
-      const isOpen = !CLOSED.has(t.status.toLowerCase());
+      const isOpen = !isClosed(t.status);
       const tag = isOpen ? '<span class="rollover-tag">STILL OPEN</span>' : "";
       return `<tr>
         <td><a class="task-id" href="${t.url}" target="_blank">${t.customId}</a></td>
@@ -154,10 +167,12 @@ function buildHtml(sprints, bugTasks, { month, yourName, managerName }) {
           </div>`).join("")}
       </div>` : "";
 
-    // Release deployment flag — only shown when a deploy task exists
-    const deployTask = s.dt_tasks.find(t => isDeployTask(t.name));
+    // Release deployment flag — look in this sprint AND the next sprint
+    // (release tasks sometimes live in the following sprint list)
+    const deployTask = s.dt_tasks.find(t => isDeployTask(t.name))
+                    || s.next_sprint_deploy_task || null;
     const deployBlock = deployTask ? (() => {
-      const onTime = CLOSED.has(deployTask.status.toLowerCase());
+      const onTime = isClosed(deployTask.status);
       const flagClass = onTime ? "deploy-flag deploy-yes" : "deploy-flag deploy-no";
       const badge     = onTime
         ? `<span class="deploy-badge-yes">&#10003; Yes</span>`
@@ -268,7 +283,7 @@ h1 span{color:#a5b4fc}
 .sstat{text-align:center}
 .sstat-val{font-size:18px;font-weight:700}
 .sstat-val.green{color:#16a34a}.sstat-val.amber{color:#d97706}.sstat-val.gray{color:#94a3b8}.sstat-val.dk{color:#475569}
-.sstat-label{font-size:9px;color:#94a3b8;font-family:'DM Mono',monospace;text-transform:uppercase}
+.sstat-label{font-size:9px;color:#94a3b8;font-family:'DM Mono',monospace;text-transform:uppercase}.sprint-dates{font-size:10px;color:#64748b;font-family:'DM Mono',monospace;margin-top:6px;margin-bottom:8px}
 .sprint-divider{width:1px;height:28px;background:#e2e8f0;margin:0 4px}
 .card-sep{height:0.5px;background:#e2e8f0;margin-bottom:10px}
 .release-pill{display:inline-flex;align-items:center;gap:4px;padding:3px 10px;border-radius:20px;font-size:10px;font-weight:500;font-family:'DM Mono',monospace}
@@ -302,7 +317,7 @@ tr:hover td{background:#f8fafc}
 .prog-bar-fill{height:100%;border-radius:3px}
 .fill-green{background:#10b981}.fill-amber{background:#f59e0b}.fill-indigo{background:#6366f1}
 .prog-val{font-size:10px;font-family:'DM Mono',monospace;color:#475569}
-.ann-block{margin-top:10px;border-radius:8px;padding:12px 14px;border:1px dashed}
+.ann-block{margin-top:10px;border-radius:8px;padding:12px 14px;border:1px dashed}.ann-frozen{font-size:12px;color:#4c1d95;line-height:1.6;font-style:italic;background:#ede9fe;padding:8px 10px;border-radius:6px;border:1px solid #c4b5fd}
 .ann-label{font-size:9px;font-family:'DM Mono',monospace;text-transform:uppercase;letter-spacing:.8px;font-weight:500;display:flex;align-items:center;gap:5px;margin-bottom:7px}
 .ann-icon{width:14px;height:14px;border-radius:3px;display:inline-flex;align-items:center;justify-content:center;font-size:8px;color:#fff;flex-shrink:0}
 .ann-ta{width:100%;padding:8px 10px;border-radius:6px;font-size:12px;color:#1e293b;font-family:'Inter',sans-serif;outline:none;resize:vertical;min-height:52px;line-height:1.5;border:1px solid}
@@ -417,6 +432,38 @@ tr:hover td{background:#f8fafc}
   <div class="footer-sign">Best regards,<br><strong>${yourName}</strong></div>
 </div>
 
+</div>
+<script>
+// Make annotations persist into PDF/print
+(function(){
+  function freezeAnnotations(){
+    document.querySelectorAll("textarea.ann-ta").forEach(function(ta){
+      var val = ta.value.trim();
+      if(!val) return;
+      var div = document.createElement("div");
+      div.className = "ann-frozen";
+      div.textContent = val;
+      ta.parentNode.insertBefore(div, ta);
+      ta.style.display = "none";
+    });
+  }
+  window.addEventListener("beforeprint", freezeAnnotations);
+  // Also wire up the download button if present
+  var dlBtn = document.getElementById("dl-annotated");
+  if(dlBtn){
+    dlBtn.addEventListener("click", function(){
+      freezeAnnotations();
+      var html = "<!DOCTYPE html>" + document.documentElement.outerHTML;
+      var blob = new Blob([html],{type:"text/html"});
+      var url  = URL.createObjectURL(blob);
+      var a    = document.createElement("a");
+      a.href   = url;
+      a.download = "iDerive_Report_annotated.html";
+      a.click();
+    });
+  }
+})();
+</script>
 </div></body></html>`;
 }
 
@@ -517,13 +564,25 @@ export default async function handler(req, res) {
       }
       const allTasks  = rawTasks.map(t=>normaliseTask(t,label));
       const dtTasks   = allTasks.filter(isDtTask);
-      const openDt    = dtTasks.filter(t=>!CLOSED.has(t.status.toLowerCase()));
-      const doneDt    = dtTasks.filter(t=>CLOSED.has(t.status.toLowerCase()));
+      const openDt    = dtTasks.filter(t=>!isClosed(t.status));
+      const doneDt    = dtTasks.filter(t=>isClosed(t.status));
       const blockedDt = dtTasks.filter(t=>t.status.toLowerCase().includes("blocked")||t.status.toLowerCase().includes("specs needed"));
+
+      // Look for deploy task in next sprint too (release may be created there)
+      let nextSprintDeployTask = null;
+      const nextInfo = sprintListMap[n+1];
+      if(nextInfo){
+        const nextRaw = await getTasksFromList(token, nextInfo.id);
+        const nextDt  = nextRaw.map(t=>normaliseTask(t,`PS${n+1}`)).filter(isDtTask);
+        nextSprintDeployTask = nextDt.find(t => isDeployTask(t.name)) || null;
+      }
 
       sprints.push({
         label, num:n,
-        type:"completed",   // all sprints here are completed
+        type:"completed",
+        startDate: info.startDate,
+        dueDate:   info.dueDate,
+        next_sprint_deploy_task: nextSprintDeployTask,
         all_tasks:allTasks, dt_tasks:dtTasks,
         open_dt:openDt, done_dt:doneDt, blocked_dt:blockedDt,
       });
