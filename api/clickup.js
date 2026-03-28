@@ -40,12 +40,21 @@ async function getTasksFromList(token, listId, extra={}) {
   return tasks;
 }
 
+function isDtEmail(email) {
+  return DT_DOMAINS.has((email||"").split("@")[1]?.toLowerCase()||"");
+}
+
 function isDtTask(task) {
-  const people = [...(task.assignees||[]), ...(task.members||[])];
-  return people.some(a => {
-    const email = a.email||a.user?.email||"";
-    return DT_DOMAINS.has(email.split("@")[1]?.toLowerCase()||"");
-  });
+  // Check assignees, members, watchers, and creator
+  const people = [
+    ...(task.assignees||[]),
+    ...(task.members||[]),
+    ...(task.watchers||[]),
+  ];
+  if (people.some(a => isDtEmail(a.email||a.user?.email||""))) return true;
+  // Also check creator
+  const creatorEmail = task.creator?.email||"";
+  return isDtEmail(creatorEmail);
 }
 
 function normaliseTask(raw, label="") {
@@ -58,18 +67,33 @@ function normaliseTask(raw, label="") {
     status,
     url:          raw.url||`https://app.clickup.com/t/${raw.id}`,
     assignees:    (raw.assignees||[]).map(a=>({ username:a.username||"", email:a.email||"" })),
+    watchers:     (raw.watchers||[]).map(a=>({ username:a.username||"", email:a.email||"" })),
     _location_ids:(raw.locations||[]).map(l=>l.id),
   };
 }
 
-function fmtAssignees(assignees) {
-  if(!assignees?.length) return "—";
-  const names = assignees.slice(0,2).map(a => {
+function fmtAssignees(assignees, watchers) {
+  // Use assignees if available, fall back to DT watchers
+  const dtAssignees = (assignees||[]).filter(a => isDtEmail(a.email||""));
+  const display = dtAssignees.length > 0 ? dtAssignees : (assignees||[]).slice(0,2);
+  if (!display.length) {
+    // No assignees — show DT watchers instead
+    const dtWatchers = (watchers||[]).filter(a => isDtEmail(a.email||"")).slice(0,2);
+    if (dtWatchers.length) {
+      return dtWatchers.map(a => {
+        const n = a.username||a.email||"";
+        const p = n.split(" ");
+        return (p.length>1 ? `${p[0]} ${p[p.length-1][0]}.` : n.split("@")[0]) + " (w)";
+      }).join(", ");
+    }
+    return "—";
+  }
+  const names = display.slice(0,2).map(a => {
     const n = a.username||a.email||"Unknown";
     const p = n.split(" ");
-    return p.length>1 ? `${p[0]} ${p[p.length-1][0]}.` : n;
+    return p.length>1 ? `${p[0]} ${p[p.length-1][0]}.` : n.split("@")[0];
   });
-  return names.join(", ")+(assignees.length>2?` +${assignees.length-2}`:"");
+  return names.join(", ")+(display.length>2?` +${display.length-2}`:"");
 }
 
 function fmtDate(ts, isDueDate) {
@@ -161,7 +185,7 @@ function buildHtml(sprints, bugTasks, { month, yourName, managerName }) {
         <td><a class="task-id" href="${t.url}" target="_blank">${t.customId}</a></td>
         <td><a class="task-name-link" href="${t.url}" target="_blank">${t.name}</a>${tag}</td>
         <td>${statusPill(t.status)}</td>
-        <td class="assignee-text">${fmtAssignees(t.assignees)}</td>
+        <td class="assignee-text">${fmtAssignees(t.assignees, t.watchers)}</td>
       </tr>`;
     }).join("\n");
 
@@ -245,7 +269,7 @@ function buildHtml(sprints, bugTasks, { month, yourName, managerName }) {
           <a class="task-id" href="${b.url}" target="_blank">${b.customId}</a>
           <a class="task-name-link" href="${b.url}" target="_blank">${name}</a>
           ${statusPill(b.status)}
-          <span class="assignee-text">${fmtAssignees(b.assignees)}</span>
+          <span class="assignee-text">${fmtAssignees(b.assignees, b.watchers)}</span>
         </div>
         <div class="ann-block bug-ann-block">
           <div class="ann-label bug-ann-label">
