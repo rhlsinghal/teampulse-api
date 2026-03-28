@@ -72,10 +72,18 @@ function fmtAssignees(assignees) {
   return names.join(", ")+(assignees.length>2?` +${assignees.length-2}`:"");
 }
 
-function fmtDate(ts) {
+function fmtDate(ts, isDueDate) {
   if(!ts) return null;
-  // Use UTC date to avoid timezone shift (ClickUp stores midnight UTC)
-  const d = new Date(parseInt(ts));
+  // ClickUp due_date is stored as start-of-next-day midnight UTC
+  // so we subtract 1 day to get the actual end date
+  let ms = parseInt(ts);
+  if(isDueDate) {
+    const d = new Date(ms);
+    if(d.getUTCHours()===0 && d.getUTCMinutes()===0 && d.getUTCSeconds()===0) {
+      ms -= 86400000; // subtract 1 day
+    }
+  }
+  const d = new Date(ms);
   const day   = d.getUTCDate();
   const month = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"][d.getUTCMonth()];
   const year  = d.getUTCFullYear();
@@ -120,7 +128,7 @@ function buildHtml(sprints, bugTasks, { month, yourName, managerName }) {
       <div class="sprint-type">Completed sprint</div>
       <div class="sprint-name">${s.label}</div>
       <div class="sprint-desc">Product Sprint ${s.num} — ${desc}</div>
-      ${(s.startDate||s.dueDate)?`<div class="sprint-dates">${s.startDate?fmtDate(s.startDate):"?"} → ${s.dueDate?fmtDate(s.dueDate):"?"}</div>`:""}
+      ${(s.startDate||s.dueDate)?`<div class="sprint-dates">${s.startDate?fmtDate(s.startDate,false):"?"} → ${s.dueDate?fmtDate(s.dueDate,true):"?"}</div>`:""}
       <div class="sprint-stats">
         <div class="sstat"><div class="sstat-val dk">${s.dt_tasks.length}</div><div class="sstat-label">Total DT</div></div>
         <div class="sprint-divider"></div>
@@ -450,6 +458,24 @@ tr:hover td{background:#f8fafc}
 </div>
 <script>
 (function(){
+  // Respond to parent page requesting the live HTML (with typed annotations)
+  window.addEventListener("message", function(e){
+    if(e.data && e.data.type === "teampulse-get-html"){
+      // Bake textarea values into the HTML before sending
+      document.querySelectorAll("textarea.ann-ta").forEach(function(ta, i){
+        ta.id = ta.id || ("ann-" + i);
+      });
+      var snap = document.documentElement.outerHTML;
+      // Inject current textarea values as content
+      document.querySelectorAll("textarea.ann-ta").forEach(function(ta){
+        var val = ta.value.replace(/</g,"&lt;").replace(/>/g,"&gt;");
+        var re  = new RegExp('id="' + ta.id + '"([^>]*)></textarea>');
+        snap    = snap.replace(re, 'id="' + ta.id + '"$1>' + val + '</textarea>');
+      });
+      e.source.postMessage({ type:"teampulse-html", html:"<!DOCTYPE html>" + snap }, "*");
+    }
+  });
+
   // Convert textareas to styled divs so they appear in print/PDF
   function freezeAll(){
     document.querySelectorAll("textarea.ann-ta").forEach(function(ta){
@@ -598,8 +624,10 @@ export default async function handler(req, res) {
         const locIds = (t.locations||[]).map(l=>l.id);
         if(locIds.includes(info.id)&&!seenIds.has(t.id)){ rawTasks.push(t); seenIds.add(t.id); }
       }
-      const allTasks  = rawTasks.map(t=>normaliseTask(t,label));
-      const dtTasks   = allTasks.filter(isDtTask);
+      // Filter DT tasks from RAW tasks (before normalising strips members field)
+      const rawDtTasks = rawTasks.filter(isDtTask);
+      const allTasks   = rawTasks.map(t=>normaliseTask(t,label));
+      const dtTasks    = rawDtTasks.map(t=>normaliseTask(t,label));
       const openDt    = dtTasks.filter(t=>!isClosed(t.status));
       const doneDt    = dtTasks.filter(t=>isClosed(t.status));
       const blockedDt = dtTasks.filter(t=>t.status.toLowerCase().includes("blocked")||t.status.toLowerCase().includes("specs needed"));
