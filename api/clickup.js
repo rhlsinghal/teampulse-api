@@ -74,15 +74,10 @@ function fmtAssignees(assignees) {
 
 function fmtDate(ts, isDueDate) {
   if(!ts) return null;
-  // ClickUp due_date is stored as start-of-next-day midnight UTC
-  // so we subtract 1 day to get the actual end date
   let ms = parseInt(ts);
-  if(isDueDate) {
-    const d = new Date(ms);
-    if(d.getUTCHours()===0 && d.getUTCMinutes()===0 && d.getUTCSeconds()===0) {
-      ms -= 86400000; // subtract 1 day
-    }
-  }
+  // ClickUp due_date is stored as 1ms before next sprint starts (end-of-day).
+  // Subtracting 1 full day gives the correct sprint end date.
+  if(isDueDate) ms -= 86400000;
   const d = new Date(ms);
   const day   = d.getUTCDate();
   const month = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"][d.getUTCMonth()];
@@ -458,22 +453,24 @@ tr:hover td{background:#f8fafc}
 </div>
 <script>
 (function(){
-  // Respond to parent page requesting the live HTML (with typed annotations)
+  // Respond to parent page requesting annotated HTML
   window.addEventListener("message", function(e){
-    if(e.data && e.data.type === "teampulse-get-html"){
-      // Bake textarea values into the HTML before sending
-      document.querySelectorAll("textarea.ann-ta").forEach(function(ta, i){
-        ta.id = ta.id || ("ann-" + i);
-      });
-      var snap = document.documentElement.outerHTML;
-      // Inject current textarea values as content
-      document.querySelectorAll("textarea.ann-ta").forEach(function(ta){
-        var val = ta.value.replace(/</g,"&lt;").replace(/>/g,"&gt;");
-        var re  = new RegExp('id="' + ta.id + '"([^>]*)></textarea>');
-        snap    = snap.replace(re, 'id="' + ta.id + '"$1>' + val + '</textarea>');
-      });
-      e.source.postMessage({ type:"teampulse-html", html:"<!DOCTYPE html>" + snap }, "*");
-    }
+    if(!e.data || e.data.type !== "teampulse-get-html") return;
+    // Assign IDs to all textareas
+    var areas = document.querySelectorAll("textarea.ann-ta");
+    areas.forEach(function(ta, i){ ta.id = ta.id || ("ann-ta-" + i); });
+    // Clone the full document
+    var clone = document.documentElement.cloneNode(true);
+    // In the clone, set each textarea's textContent to current value
+    var cloneAreas = clone.querySelectorAll("textarea.ann-ta");
+    areas.forEach(function(ta, i){
+      if(cloneAreas[i]){
+        cloneAreas[i].textContent = ta.value;
+        cloneAreas[i].removeAttribute("data-frozen");
+      }
+    });
+    var serialized = "<!DOCTYPE html>" + clone.outerHTML;
+    e.source.postMessage({ type: "teampulse-html", html: serialized }, "*");
   });
 
   // Convert textareas to styled divs so they appear in print/PDF
@@ -636,8 +633,9 @@ export default async function handler(req, res) {
       let nextSprintDeployTask = null;
       const nextInfo = sprintListMap[n+1];
       if(nextInfo){
-        const nextRaw = await getTasksFromList(token, nextInfo.id);
-        const nextDt  = nextRaw.map(t=>normaliseTask(t,`PS${n+1}`)).filter(isDtTask);
+        const nextRaw    = await getTasksFromList(token, nextInfo.id);
+        const nextRawDt  = nextRaw.filter(isDtTask);
+        const nextDt     = nextRawDt.map(t=>normaliseTask(t,`PS${n+1}`));
         nextSprintDeployTask = nextDt.find(t => isDeployTask(t.name)) || null;
       }
 
@@ -663,7 +661,23 @@ export default async function handler(req, res) {
 
     const html = buildHtml(sprints,bugTasks,{month:reportMonth,yourName,managerName});
     const sprintNames = sprints.map(s=>s.label);
-    res.status(200).json({html, sprints:sprints.length, bugs:bugTasks.length, month:reportMonth, sprintNames});
+
+    // Debug info — helps diagnose task count and date issues
+    const debug = sprints.map(s=>({
+      label:      s.label,
+      totalRaw:   s.all_tasks.length,
+      totalDt:    s.dt_tasks.length,
+      done:       s.done_dt.length,
+      open:       s.open_dt.length,
+      startDate:  s.startDate,
+      dueDate:    s.dueDate,
+      startFmt:   s.startDate ? new Date(s.startDate).toISOString() : null,
+      dueFmt:     s.dueDate   ? new Date(s.dueDate).toISOString()   : null,
+      sampleStatuses: s.dt_tasks.slice(0,5).map(t=>t.status),
+    }));
+    console.log("Sprint debug:", JSON.stringify(debug, null, 2));
+
+    res.status(200).json({html, sprints:sprints.length, bugs:bugTasks.length, month:reportMonth, sprintNames, debug});
 
   } catch(e){
     console.error("ClickUp error:",e);
