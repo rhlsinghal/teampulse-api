@@ -41,7 +41,11 @@ async function getTasksFromList(token, listId, extra={}) {
 }
 
 function isDtTask(task) {
-  return (task.assignees||[]).some(a => DT_DOMAINS.has((a.email||"").split("@")[1]?.toLowerCase()||""));
+  const people = [...(task.assignees||[]), ...(task.members||[])];
+  return people.some(a => {
+    const email = a.email||a.user?.email||"";
+    return DT_DOMAINS.has(email.split("@")[1]?.toLowerCase()||"");
+  });
 }
 
 function normaliseTask(raw, label="") {
@@ -70,7 +74,12 @@ function fmtAssignees(assignees) {
 
 function fmtDate(ts) {
   if(!ts) return null;
-  return new Date(ts).toLocaleDateString("en-GB",{day:"numeric",month:"short",year:"numeric"});
+  // Use UTC date to avoid timezone shift (ClickUp stores midnight UTC)
+  const d = new Date(parseInt(ts));
+  const day   = d.getUTCDate();
+  const month = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"][d.getUTCMonth()];
+  const year  = d.getUTCFullYear();
+  return `${day} ${month} ${year}`;
 }
 
 function statusPill(status) {
@@ -377,7 +386,13 @@ tr:hover td{background:#f8fafc}
 <body><div class="wrapper">
 
 <div class="header">
-  <div class="header-top"><div class="logo-mark">iDerive</div><div class="date-badge">${month.toUpperCase()}</div></div>
+  <div class="header-top">
+    <div class="logo-mark">iDerive</div>
+    <div style="display:flex;align-items:center;gap:8px">
+      <button id="save-annotated" onclick="document.getElementById('save-annotated').textContent='Saving...'" style="padding:5px 14px;border-radius:20px;border:1px solid rgba(255,255,255,0.3);background:rgba(255,255,255,0.15);color:#e0e7ff;font-size:11px;font-family:'DM Mono',monospace;cursor:pointer;letter-spacing:.5px">Save with annotations</button>
+      <div class="date-badge">${month.toUpperCase()}</div>
+    </div>
+  </div>
   <h1>Monthly Progress <span>Update</span></h1>
   <p class="header-sub">Sprint overview · Deployments · Bug tracking · Overall progress · Source: ClickUp<br>
   <span style="color:#94a3b8;font-size:12px;font-family:'DM Mono',monospace">Filtered: decision-tree.com assignees only · Completed sprints only</span></p>
@@ -434,34 +449,55 @@ tr:hover td{background:#f8fafc}
 
 </div>
 <script>
-// Make annotations persist into PDF/print
 (function(){
-  function freezeAnnotations(){
+  // Convert textareas to styled divs so they appear in print/PDF
+  function freezeAll(){
     document.querySelectorAll("textarea.ann-ta").forEach(function(ta){
+      if(ta.dataset.frozen) return;
+      ta.dataset.frozen = "1";
       var val = ta.value.trim();
-      if(!val) return;
       var div = document.createElement("div");
       div.className = "ann-frozen";
-      div.textContent = val;
-      ta.parentNode.insertBefore(div, ta);
+      div.textContent = val || "(no note added)";
+      div.style.color = val ? "" : "#9ca3af";
+      div.style.fontStyle = val ? "italic" : "normal";
+      ta.parentNode.insertBefore(div, ta.nextSibling);
       ta.style.display = "none";
     });
   }
-  window.addEventListener("beforeprint", freezeAnnotations);
-  // Also wire up the download button if present
-  var dlBtn = document.getElementById("dl-annotated");
-  if(dlBtn){
-    dlBtn.addEventListener("click", function(){
-      freezeAnnotations();
-      var html = "<!DOCTYPE html>" + document.documentElement.outerHTML;
-      var blob = new Blob([html],{type:"text/html"});
+
+  // Freeze before printing (covers browser Print and Ctrl+P)
+  window.addEventListener("beforeprint", freezeAll);
+
+  // Save with annotations button — builds a self-contained HTML with notes baked in
+  document.addEventListener("DOMContentLoaded", function(){
+    var btn = document.getElementById("save-annotated");
+    if(!btn) return;
+    btn.addEventListener("click", function(){
+      // Snapshot current textarea values into data attributes
+      document.querySelectorAll("textarea.ann-ta").forEach(function(ta, i){
+        ta.dataset.val = ta.value;
+        ta.id = ta.id || ("ann-ta-" + i);
+      });
+      // Build patched HTML with values injected as defaultValue
+      var html = document.documentElement.outerHTML;
+      document.querySelectorAll("textarea.ann-ta").forEach(function(ta){
+        var escaped = (ta.dataset.val||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+        var placeholder = "id=\"" + ta.id + "\"";
+        html = html.replace(
+          new RegExp('id="' + ta.id + '"([^>]*)></textarea>'),
+          'id="' + ta.id + '"$1>' + escaped + '</textarea>'
+        );
+      });
+      var blob = new Blob(["<!DOCTYPE html>" + html],{type:"text/html"});
       var url  = URL.createObjectURL(blob);
       var a    = document.createElement("a");
       a.href   = url;
-      a.download = "iDerive_Report_annotated.html";
+      a.download = document.title.replace(/[^a-z0-9]/gi,"_") + "_annotated.html";
       a.click();
+      setTimeout(function(){ URL.revokeObjectURL(url); }, 1000);
     });
-  }
+  });
 })();
 </script>
 </div></body></html>`;
