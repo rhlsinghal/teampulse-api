@@ -517,35 +517,42 @@ tr:hover td{background:#f8fafc}
   // Freeze before printing (covers browser Print and Ctrl+P)
   window.addEventListener("beforeprint", freezeAll);
 
-  // Save with annotations button — builds a self-contained HTML with notes baked in
-  document.addEventListener("DOMContentLoaded", function(){
+  // Save with annotations — attach directly (DOMContentLoaded may have already fired)
+  function attachSaveBtn() {
     var btn = document.getElementById("save-annotated");
     if(!btn) return;
     btn.addEventListener("click", function(){
-      // Snapshot current textarea values into data attributes
+      btn.textContent = "Saving...";
+      // Assign IDs to all textareas
       document.querySelectorAll("textarea.ann-ta").forEach(function(ta, i){
-        ta.dataset.val = ta.value;
         ta.id = ta.id || ("ann-ta-" + i);
       });
-      // Build patched HTML with values injected as defaultValue
-      var html = document.documentElement.outerHTML;
-      document.querySelectorAll("textarea.ann-ta").forEach(function(ta){
-        var escaped = (ta.dataset.val||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
-        var placeholder = "id=\"" + ta.id + "\"";
-        html = html.replace(
-          new RegExp('id="' + ta.id + '"([^>]*)></textarea>'),
-          'id="' + ta.id + '"$1>' + escaped + '</textarea>'
-        );
+      // Clone DOM and bake in textarea values
+      var clone = document.documentElement.cloneNode(true);
+      var origAreas  = document.querySelectorAll("textarea.ann-ta");
+      var cloneAreas = clone.querySelectorAll("textarea.ann-ta");
+      origAreas.forEach(function(ta, i){
+        if(cloneAreas[i]) cloneAreas[i].textContent = ta.value;
       });
-      var blob = new Blob(["<!DOCTYPE html>" + html],{type:"text/html"});
+      // Remove the save button from downloaded file (not needed there)
+      var cloneBtn = clone.querySelector("#save-annotated");
+      if(cloneBtn) cloneBtn.style.display = "none";
+      var blob = new Blob(["<!DOCTYPE html>" + clone.outerHTML],{type:"text/html"});
       var url  = URL.createObjectURL(blob);
       var a    = document.createElement("a");
       a.href   = url;
       a.download = document.title.replace(/[^a-z0-9]/gi,"_") + "_annotated.html";
       a.click();
-      setTimeout(function(){ URL.revokeObjectURL(url); }, 1000);
+      setTimeout(function(){
+        URL.revokeObjectURL(url);
+        btn.textContent = "Saved!";
+        setTimeout(function(){ btn.textContent = "Save with annotations"; }, 2000);
+      }, 500);
     });
-  });
+  }
+  // Try immediately, then also on DOMContentLoaded as fallback
+  attachSaveBtn();
+  document.addEventListener("DOMContentLoaded", attachSaveBtn);
 })();
 </script>
 </div></body></html>`;
@@ -685,10 +692,14 @@ export default async function handler(req, res) {
       .filter(t => (t.watchers||[]).some(w => isDtEmail(w.email||"")))
       .map(t => normaliseTask(t));
 
-    // ── Month label ────────────────────────────────────────────────────────
-    const reportMonth = dateFrom
-      ? new Date(dateFrom).toLocaleDateString("en-US",{month:"long",year:"numeric"})
-      : month;
+    // ── Month label — use UTC to avoid timezone shift ────────────────────
+    let reportMonth = month;
+    if (dateFrom) {
+      const d = new Date(parseInt(dateFrom));
+      const monthNames = ["January","February","March","April","May","June",
+                          "July","August","September","October","November","December"];
+      reportMonth = `${monthNames[d.getUTCMonth()]} ${d.getUTCFullYear()}`;
+    }
 
     const html = buildHtml(sprints,bugTasks,{month:reportMonth,yourName,managerName});
     const sprintNames = sprints.map(s=>s.label);
