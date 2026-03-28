@@ -178,9 +178,10 @@ function buildHtml(sprints, bugTasks, { month, yourName, managerName }) {
       </div>` : "";
 
     // Task rows — mark open tasks with STILL OPEN tag
-    const taskRows = s.dt_tasks.map(t => {
-      const isOpen = !isClosed(t.status);
-      const tag = isOpen ? '<span class="rollover-tag">STILL OPEN</span>' : "";
+    // display_dt_tasks = open tasks only (closed ones counted in stats but not shown)
+    const displayTasks = s.display_dt_tasks || s.dt_tasks.filter(t => !isClosed(t.status));
+    const taskRows = displayTasks.map(t => {
+      const tag = s.open_dt.some(o=>o.id===t.id) ? '<span class="rollover-tag">STILL OPEN</span>' : "";
       return `<tr>
         <td><a class="task-id" href="${t.url}" target="_blank">${t.customId}</a></td>
         <td><a class="task-name-link" href="${t.url}" target="_blank">${t.name}</a>${tag}</td>
@@ -645,13 +646,15 @@ export default async function handler(req, res) {
         const locIds = (t.locations||[]).map(l=>l.id);
         if(locIds.includes(info.id)&&!seenIds.has(t.id)){ rawTasks.push(t); seenIds.add(t.id); }
       }
-      // Filter DT tasks from RAW tasks (before normalising strips members field)
+      // Filter DT tasks from RAW tasks (before normalising strips members/watchers)
       const rawDtTasks = rawTasks.filter(isDtTask);
       const allTasks   = rawTasks.map(t=>normaliseTask(t,label));
       const dtTasks    = rawDtTasks.map(t=>normaliseTask(t,label));
       const openDt    = dtTasks.filter(t=>!isClosed(t.status));
       const doneDt    = dtTasks.filter(t=>isClosed(t.status));
       const blockedDt = dtTasks.filter(t=>t.status.toLowerCase().includes("blocked")||t.status.toLowerCase().includes("specs needed"));
+      // Only show open/non-closed tasks in the task table — completed ones are counted but not listed
+      const displayDtTasks = dtTasks.filter(t=>!isClosed(t.status));
 
       // Look for deploy task in next sprint too (release may be created there)
       let nextSprintDeployTask = null;
@@ -670,13 +673,17 @@ export default async function handler(req, res) {
         dueDate:   info.dueDate,
         next_sprint_deploy_task: nextSprintDeployTask,
         all_tasks:allTasks, dt_tasks:dtTasks,
+        display_dt_tasks: displayDtTasks,
         open_dt:openDt, done_dt:doneDt, blocked_dt:blockedDt,
       });
     }
 
     // ── Bug tasks ──────────────────────────────────────────────────────────
     const rawBugs  = await getTasksFromList(token,bugListId,{date_created_gt:String(rangeStart)});
-    const bugTasks = rawBugs.map(t=>normaliseTask(t)).filter(isDtTask);
+    // Bugs: only include if a DT user is a watcher (explicit involvement signal)
+    const bugTasks = rawBugs
+      .filter(t => (t.watchers||[]).some(w => isDtEmail(w.email||"")))
+      .map(t => normaliseTask(t));
 
     // ── Month label ────────────────────────────────────────────────────────
     const reportMonth = dateFrom
