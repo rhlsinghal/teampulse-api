@@ -656,7 +656,7 @@ export default async function handler(req, res) {
     }
 
     // ── Cross-list tasks ───────────────────────────────────────────────────
-    const rangeStart = dateFrom || new Date(now.getFullYear(),now.getMonth(),1).getTime();
+    const rangeStart = dateFrom || Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1);
     const crossRaw   = [];
     for(const lid of crossListIds){
       const batch = await getTasksFromList(token,lid,{date_updated_gt:String(rangeStart)});
@@ -708,8 +708,13 @@ export default async function handler(req, res) {
     }
 
     // ── Bug tasks ──────────────────────────────────────────────────────────
-    const rawBugs  = await getTasksFromList(token,bugListId,{date_created_gt:String(rangeStart)});
-    // Bugs: only include if a DT user is a watcher (explicit involvement signal)
+    // Bugs: fetch with both start AND end date to scope to selected period only
+    const rangeEnd = dateTo || Date.UTC(now.getUTCFullYear(), now.getUTCMonth()+1, 0, 23, 59, 59, 999);
+    const rawBugs  = await getTasksFromList(token, bugListId, {
+      date_created_gt: String(rangeStart),
+      date_created_lt: String(rangeEnd),
+    });
+    // Only include if a DT user is a watcher (explicit involvement signal)
     const bugTasks = rawBugs
       .filter(t => (t.watchers||[]).some(w => isDtEmail(w.email||"")))
       .map(t => normaliseTask(t));
