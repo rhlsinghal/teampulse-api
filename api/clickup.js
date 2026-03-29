@@ -443,24 +443,25 @@ tr:hover td{background:#f8fafc}
       <div class="date-badge">${month.toUpperCase()}</div>
     </div>
   </div>
-  <h1>Monthly Progress <span>Update</span></h1>
-  <p class="header-sub">Sprint overview · Deployments · Bug tracking · Overall progress · Source: ClickUp<br>
+  <h1>Sprint Progress <span>Update</span></h1>
+  <p class="header-sub">${bugTasks.length ? "Sprint overview · Deployments · Bug tracking · Overall progress" : "Sprint overview · Deployments · Overall progress"} · Source: ClickUp<br>
   <span style="color:#94a3b8;font-size:12px;font-family:'DM Mono',monospace">Filtered: decision-tree.com assignees only · Completed sprints only</span></p>
   <div class="header-meta">
     <div class="meta-item"><div class="meta-dot blue"></div><span class="meta-label">Completed sprints</span><span class="meta-val">${sprintNames}</span></div>
     <div class="meta-item"><div class="meta-dot amber"></div><span class="meta-label">DT carry-overs</span><span class="meta-val">${totalOpen} open</span></div>
-    <div class="meta-item"><div class="meta-dot red"></div><span class="meta-label">DT bugs</span><span class="meta-val">${bugTasks.length} this month</span></div>
+    ${bugTasks.length ? `<div class="meta-item"><div class="meta-dot red"></div><span class="meta-label">DT bugs</span><span class="meta-val">${bugTasks.length} this month</span></div>` : ""}
   </div>
 </div>
 
 <div class="body">
   <div class="greeting">Hi <strong>${managerName}</strong>,<br>
-  Below is the iDerive monthly progress update for <strong>${month}</strong>. This report covers <strong>${sprints.length} completed sprint(s)</strong> (${sprintNames}). Tasks and bugs are <strong>filtered to Decision Tree team members only</strong>.</div>
+  Below is the iDerive progress update for <strong>${month}</strong>. This report covers <strong>${sprints.length} completed sprint(s)</strong> (${sprintNames}). ${bugTasks.length ? "Tasks and bugs are" : "Tasks are"} <strong>filtered to Decision Tree team members only</strong>.</div>
 
   <div class="sprint-overview">${overviewCards}</div>
 
   ${sprintSections}
 
+  ${bugTasks.length ? `
   <div class="section">
     <div class="section-head">
       <div class="section-icon si-red">&#128027;</div>
@@ -473,7 +474,7 @@ tr:hover td{background:#f8fafc}
       <div><div class="prog-label">Under review</div><div class="prog-bar-bg"><div class="prog-bar-fill fill-amber" style="width:${bugTasks.length?Math.round(review.length/bugTasks.length*100):0}%"></div></div><div class="prog-val">${review.length} bugs</div></div>
       <div><div class="prog-label">Active</div><div class="prog-bar-bg"><div class="prog-bar-fill fill-indigo" style="width:${bugTasks.length?Math.round(activeBugs.length/bugTasks.length*100):0}%"></div></div><div class="prog-val">${activeBugs.length} bugs</div></div>
     </div>
-  </div>
+  </div>` : ""}
 
   <div class="divider"></div>
 
@@ -481,7 +482,7 @@ tr:hover td{background:#f8fafc}
     <div class="section-head"><div class="section-icon si-green">&#128200;</div><span class="section-title">Overall progress &amp; highlights</span></div>
     <div class="overall-grid">
       <div class="overall-card"><div class="oc-title">&#128640; Deployment</div><div class="oc-body">Completed sprints: ${sprintNames}. See release flags above for deployment status per sprint.</div></div>
-      <div class="overall-card"><div class="oc-title">&#128027; Bug rate</div><div class="oc-body"><strong>${bugResPct}%</strong> of DT bugs resolved this month. <strong>${review.length}</strong> under active review.</div></div>
+      ${bugTasks.length ? `<div class="overall-card"><div class="oc-title">&#128027; Bug rate</div><div class="oc-body"><strong>${bugResPct}%</strong> of DT bugs resolved this month. <strong>${review.length}</strong> under active review.</div></div>` : ""}
       <div class="overall-card"><div class="oc-title">&#8629; Carry-overs</div><div class="oc-body"><strong>${totalOpen}</strong> DT task(s) from completed sprints remain open.</div></div>
       <div class="overall-card"><div class="oc-title">&#128203; Sprint summary</div><div class="oc-body">${completionSummary}.</div></div>
     </div>
@@ -708,22 +709,27 @@ export default async function handler(req, res) {
     }
 
     // ── Bug tasks ──────────────────────────────────────────────────────────
-    // Bugs: fetch with both start AND end date to scope to selected period only
-    const rangeEnd = dateTo || Date.UTC(now.getUTCFullYear(), now.getUTCMonth()+1, 0, 23, 59, 59, 999);
-    const rawBugs  = await getTasksFromList(token, bugListId, {
-      date_created_gt: String(rangeStart),
-      date_created_lt: String(rangeEnd),
-    });
-    // Only include if a DT user is a watcher (explicit involvement signal)
-    const bugTasks = rawBugs
-      .filter(t => (t.watchers||[]).some(w => isDtEmail(w.email||"")))
-      .map(t => normaliseTask(t));
+    // Bugs: only fetch when using month filter (not sprint number mode)
+    // We cannot reliably scope bugs to specific sprint numbers
+    let bugTasks = [];
+    if (!requestedNums.length && dateFrom && dateTo) {
+      const rangeEnd = dateTo;
+      const rawBugs  = await getTasksFromList(token, bugListId, {
+        date_created_gt: String(rangeStart),
+        date_created_lt: String(rangeEnd),
+      });
+      bugTasks = rawBugs
+        .filter(t => (t.watchers||[]).some(w => isDtEmail(w.email||"")))
+        .map(t => normaliseTask(t));
+    }
 
-    // ── Month label — use label sent from app if available ───────────────
-    const reportMonth = req.body?.monthLabel || month;
+    // ── Report label — sprint names when manual, month label when month filter ──
+    const sprintNames = sprints.map(s => s.label);
+    const reportMonth = requestedNums.length
+      ? sprintNames.join(", ")
+      : (req.body?.monthLabel || month);
 
     const html = buildHtml(sprints,bugTasks,{month:reportMonth,yourName,managerName});
-    const sprintNames = sprints.map(s=>s.label);
 
     res.status(200).json({html, sprints:sprints.length, bugs:bugTasks.length, month:reportMonth, sprintNames});
 
