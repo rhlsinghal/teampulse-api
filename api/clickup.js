@@ -138,8 +138,14 @@ function buildHtml(sprints, bugTasks, { month, yourName, managerName }) {
     const allGood = s.open_dt.length === 0;
     const cls     = allGood ? "sprint-card completed" : "sprint-card attention";
     const desc    = allGood ? "All DT tasks closed." : `${s.open_dt.length} DT task(s) still open.`;
-    const deployTask = s.dt_tasks.find(t => isDeployTask(t.name));
-    const deployDone = deployTask ? isClosed(deployTask.status) : null;
+    const deployTask = s.dt_tasks.find(t => isDeployTask(t.name))
+                    || s.next_sprint_deploy_task || null;
+    const deployDeadline = s.startDate || null;
+    const deployDone = deployTask
+      ? (deployDeadline && deployTask.dateUpdated
+          ? deployTask.dateUpdated <= deployDeadline
+          : isClosed(deployTask.status))
+      : null;
     const releasePill = deployDone === true
       ? `<span class="release-pill rp-yes">&#10003; Release on time</span>`
       : deployDone === false
@@ -207,26 +213,23 @@ function buildHtml(sprints, bugTasks, { month, yourName, managerName }) {
           </div>`).join("")}
       </div>` : "";
 
-    // Release deployment flag — look in this sprint AND the next sprint
+    // Release deployment flag
+    // Deadline = sprint's own startDate (Monday the new sprint begins)
+    // Completion signal = date_updated (date_closed is always null in ClickUp)
     const deployTask = s.dt_tasks.find(t => isDeployTask(t.name))
                     || s.next_sprint_deploy_task || null;
     const deployBlock = deployTask ? (() => {
-      // On time = date_updated (completion signal) is on or before due_date
-      // If no due_date set, fall back to checking if status is closed
+      const deadline   = s.startDate || null;
+      const completed  = deployTask.dateUpdated || null;
       let onTime;
-      if (deployTask.dueDate && deployTask.dateUpdated) {
-        onTime = deployTask.dateUpdated <= deployTask.dueDate;
+      if (deadline && completed) {
+        onTime = completed <= deadline;
       } else {
         onTime = isClosed(deployTask.status);
       }
 
-      // Format dates for display
-      const dueFmt     = deployTask.dueDate
-        ? fmtDate(deployTask.dueDate, true)
-        : "No due date set";
-      const updatedFmt = deployTask.dateUpdated
-        ? fmtDate(deployTask.dateUpdated, false)
-        : "—";
+      const deadlineFmt  = deadline  ? fmtDate(deadline, false)  : "—";
+      const completedFmt = completed ? fmtDate(completed, false) : "—";
 
       const flagClass = onTime ? "deploy-flag deploy-yes" : "deploy-flag deploy-no";
       const badge     = onTime
@@ -242,7 +245,7 @@ function buildHtml(sprints, bugTasks, { month, yourName, managerName }) {
         <div class="deploy-left">
           <div class="deploy-title">Release deployment completed on time?</div>
           <div class="deploy-sub">${deployTask.name} (${deployTask.customId})</div>
-          <div class="deploy-dates">Due: ${dueFmt} &nbsp;·&nbsp; Completed: ${updatedFmt}</div>
+          <div class="deploy-dates">Deadline: ${deadlineFmt} &nbsp;·&nbsp; Completed: ${completedFmt}</div>
           ${delayInput}
         </div>
         ${badge}
