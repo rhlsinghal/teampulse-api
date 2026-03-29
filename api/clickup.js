@@ -417,7 +417,7 @@ tr:hover td{background:#f8fafc}
   <div class="header-top">
     <div class="logo-mark">iDerive</div>
     <div style="display:flex;align-items:center;gap:8px">
-      <button id="save-annotated" onclick="document.getElementById('save-annotated').textContent='Saving...'" style="padding:5px 14px;border-radius:20px;border:1px solid rgba(255,255,255,0.3);background:rgba(255,255,255,0.15);color:#e0e7ff;font-size:11px;font-family:'DM Mono',monospace;cursor:pointer;letter-spacing:.5px">Save with annotations</button>
+
       <div class="date-badge">${month.toUpperCase()}</div>
     </div>
   </div>
@@ -692,14 +692,8 @@ export default async function handler(req, res) {
       .filter(t => (t.watchers||[]).some(w => isDtEmail(w.email||"")))
       .map(t => normaliseTask(t));
 
-    // ── Month label — use UTC to avoid timezone shift ────────────────────
-    let reportMonth = month;
-    if (dateFrom) {
-      const d = new Date(parseInt(dateFrom));
-      const monthNames = ["January","February","March","April","May","June",
-                          "July","August","September","October","November","December"];
-      reportMonth = `${monthNames[d.getUTCMonth()]} ${d.getUTCFullYear()}`;
-    }
+    // ── Month label — use label sent from app if available ───────────────
+    const reportMonth = req.body?.monthLabel || month;
 
     const html = buildHtml(sprints,bugTasks,{month:reportMonth,yourName,managerName});
     const sprintNames = sprints.map(s=>s.label);
