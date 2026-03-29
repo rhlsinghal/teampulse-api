@@ -443,7 +443,7 @@ tr:hover td{background:#f8fafc}
       <div class="date-badge">${month.toUpperCase()}</div>
     </div>
   </div>
-  <h1>Sprint Progress <span>Update</span></h1>
+  <h1>Monthly Progress <span>Update</span></h1>
   <p class="header-sub">${bugTasks.length ? "Sprint overview · Deployments · Bug tracking · Overall progress" : "Sprint overview · Deployments · Overall progress"} · Source: ClickUp<br>
   <span style="color:#94a3b8;font-size:12px;font-family:'DM Mono',monospace">Filtered: decision-tree.com assignees only · Completed sprints only</span></p>
   <div class="header-meta">
