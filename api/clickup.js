@@ -68,6 +68,9 @@ function normaliseTask(raw, label="") {
     url:          raw.url||`https://app.clickup.com/t/${raw.id}`,
     assignees:    (raw.assignees||[]).map(a=>({ username:a.username||"", email:a.email||"" })),
     watchers:     (raw.watchers||[]).map(a=>({ username:a.username||"", email:a.email||"" })),
+    dueDate:      raw.due_date      ? parseInt(raw.due_date)      : null,
+    dateUpdated:  raw.date_updated  ? parseInt(raw.date_updated)  : null,
+    dateClosed:   raw.date_closed   ? parseInt(raw.date_closed)   : null,
     _location_ids:(raw.locations||[]).map(l=>l.id),
   };
 }
@@ -205,15 +208,30 @@ function buildHtml(sprints, bugTasks, { month, yourName, managerName }) {
       </div>` : "";
 
     // Release deployment flag — look in this sprint AND the next sprint
-    // (release tasks sometimes live in the following sprint list)
     const deployTask = s.dt_tasks.find(t => isDeployTask(t.name))
                     || s.next_sprint_deploy_task || null;
     const deployBlock = deployTask ? (() => {
-      const onTime = isClosed(deployTask.status);
+      // On time = date_updated (completion signal) is on or before due_date
+      // If no due_date set, fall back to checking if status is closed
+      let onTime;
+      if (deployTask.dueDate && deployTask.dateUpdated) {
+        onTime = deployTask.dateUpdated <= deployTask.dueDate;
+      } else {
+        onTime = isClosed(deployTask.status);
+      }
+
+      // Format dates for display
+      const dueFmt     = deployTask.dueDate
+        ? fmtDate(deployTask.dueDate, true)
+        : "No due date set";
+      const updatedFmt = deployTask.dateUpdated
+        ? fmtDate(deployTask.dateUpdated, false)
+        : "—";
+
       const flagClass = onTime ? "deploy-flag deploy-yes" : "deploy-flag deploy-no";
       const badge     = onTime
-        ? `<span class="deploy-badge-yes">&#10003; Yes</span>`
-        : `<span class="deploy-badge-no">&#10007; No</span>`;
+        ? `<span class="deploy-badge-yes">&#10003; On time</span>`
+        : `<span class="deploy-badge-no">&#10007; Delayed</span>`;
       const delayInput = !onTime ? `
         <div class="delay-reason">
           <div class="delay-reason-label">Reason for delay</div>
@@ -224,6 +242,7 @@ function buildHtml(sprints, bugTasks, { month, yourName, managerName }) {
         <div class="deploy-left">
           <div class="deploy-title">Release deployment completed on time?</div>
           <div class="deploy-sub">${deployTask.name} (${deployTask.customId})</div>
+          <div class="deploy-dates">Due: ${dueFmt} &nbsp;·&nbsp; Completed: ${updatedFmt}</div>
           ${delayInput}
         </div>
         ${badge}
@@ -374,7 +393,7 @@ tr:hover td{background:#f8fafc}
 .deploy-sub{font-size:11px;color:#6b7280;font-family:'DM Mono',monospace}
 .deploy-badge-yes{background:#dcfce7;color:#166534;padding:3px 10px;border-radius:20px;font-size:10px;font-weight:500;font-family:'DM Mono',monospace;white-space:nowrap;flex-shrink:0}
 .deploy-badge-no{background:#fef3c7;color:#92400e;padding:3px 10px;border-radius:20px;font-size:10px;font-weight:500;font-family:'DM Mono',monospace;white-space:nowrap;flex-shrink:0}
-.delay-reason{margin-top:10px;padding-top:10px;border-top:1px dashed #fde68a}
+.deploy-dates{font-size:10px;color:#6b7280;font-family:'DM Mono',monospace;margin-top:3px}.delay-reason{margin-top:10px;padding-top:10px;border-top:1px dashed #fde68a}
 .delay-reason-label{font-size:9px;font-family:'DM Mono',monospace;text-transform:uppercase;letter-spacing:.8px;color:#92400e;margin-bottom:5px;font-weight:500}
 .delay-ta{background:#fff;border-color:#fde68a}
 .delay-ta:focus{border-color:#f59e0b;outline:none}
