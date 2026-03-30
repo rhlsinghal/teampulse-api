@@ -840,12 +840,25 @@ table{width:100%;border-collapse:collapse}
       <tbody>
         ${(() => {
           const memberMap = {};
+          const COLORS = ["#5b5ff5","#D4537E","#1D9E75","#BA7517","#7c3aed","#0284c7"];
+          const addMember = (email, username) => {
+            if(!email || !isDtEmail(email)) return null;
+            const name = username || email.split("@")[0];
+            if(!memberMap[name]) memberMap[name] = { tasks:0, done:0, open:0, bugs:0, sprints:new Set(), color:COLORS[Object.keys(memberMap).length%COLORS.length] };
+            return name;
+          };
           for(const s of sprints) {
             for(const t of s.dt_tasks) {
-              for(const a of t.assignees||[]) {
-                if(!a.email || !isDtEmail(a.email)) continue;  // DT only
-                const name = a.username || a.email.split("@")[0];
-                if(!memberMap[name]) memberMap[name] = { tasks:0, done:0, open:0, bugs:0, sprints: new Set(), color: ["#5b5ff5","#D4537E","#1D9E75","#BA7517","#7c3aed","#0284c7"][Object.keys(memberMap).length%6] };
+              // Collect unique DT people from assignees + watchers
+              const dtPeople = new Map();
+              for(const a of [...(t.assignees||[]), ...(t.watchers||[])]) {
+                if(a.email && isDtEmail(a.email) && !dtPeople.has(a.email)) {
+                  dtPeople.set(a.email, a.username || a.email.split("@")[0]);
+                }
+              }
+              for(const [email, username] of dtPeople) {
+                const name = addMember(email, username);
+                if(!name) continue;
                 memberMap[name].tasks++;
                 if(isClosed(t.status)) memberMap[name].done++;
                 else memberMap[name].open++;
@@ -854,10 +867,15 @@ table{width:100%;border-collapse:collapse}
             }
           }
           for(const b of bugTasks) {
-            for(const a of b.assignees||[]) {
-              if(!isDtEmail(a.email||"")) continue;  // DT only
-              const name = a.username || a.email?.split("@")[0];
-              if(name && memberMap[name]) memberMap[name].bugs++;
+            const dtPeople = new Map();
+            for(const a of [...(b.assignees||[]), ...(b.watchers||[])]) {
+              if(a.email && isDtEmail(a.email) && !dtPeople.has(a.email)) {
+                dtPeople.set(a.email, a.username || a.email.split("@")[0]);
+              }
+            }
+            for(const [email, username] of dtPeople) {
+              const name = username || email.split("@")[0];
+              if(memberMap[name]) memberMap[name].bugs++;
             }
           }
           return Object.entries(memberMap).sort((a,b)=>b[1].tasks-a[1].tasks).map(([name,m])=>{
