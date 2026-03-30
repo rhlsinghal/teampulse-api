@@ -581,6 +581,362 @@ tr:hover td{background:#f8fafc}
 </div></body></html>`;
 }
 
+
+// ── Quarterly HTML builder ────────────────────────────────────────────────────
+function buildQuarterlyHtml(sprints, bugTasks, { quarter, yourName, managerName }) {
+  const now         = new Date().toISOString().slice(0,16).replace("T"," ");
+  const sprintNames = sprints.map(s=>s.label).join(", ");
+  const totalDt     = sprints.reduce((a,s)=>a+s.dt_tasks.length,0);
+  const totalDone   = sprints.reduce((a,s)=>a+s.done_dt.length,0);
+  const totalOpen   = sprints.reduce((a,s)=>a+s.open_dt.length,0);
+  const onTimeCount = sprints.filter(s=>{
+    const deployTask = s.dt_tasks.find(t=>isDeployTask(t.name)) || s.next_sprint_deploy_task || null;
+    if(!deployTask) return false;
+    const deadline  = s.startDate || null;
+    const completed = deployTask.dateUpdated || null;
+    return deadline && completed ? completed <= deadline : isClosed(deployTask.status);
+  }).length;
+  const compPct = totalDt ? Math.round(totalDone/totalDt*100) : 0;
+  const bugResolved = bugTasks.filter(b=>["completed","closed","user error"].includes(b.status.toLowerCase()));
+  const bugActive   = bugTasks.filter(b=>!["completed","closed","user error"].includes(b.status.toLowerCase())&&!b.status.toLowerCase().includes("review"));
+  const bugReview   = bugTasks.filter(b=>b.status.toLowerCase().includes("review"));
+  const bugResPct   = bugTasks.length ? Math.round(bugResolved.length/bugTasks.length*100) : 0;
+
+  // ── Sprint cards (all sprints) ────────────────────────────────────────────
+  const sprintCards = sprints.map(s => {
+    const total   = s.dt_tasks.length;
+    const done    = s.done_dt.length;
+    const open    = s.open_dt.length;
+    const pct     = total ? Math.round(done/total*100) : 0;
+    const deployTask = s.dt_tasks.find(t=>isDeployTask(t.name)) || s.next_sprint_deploy_task || null;
+    let onTime = null;
+    if(deployTask) {
+      const deadline  = s.startDate || null;
+      const completed = deployTask.dateUpdated || null;
+      onTime = deadline && completed ? completed <= deadline : isClosed(deployTask.status);
+    }
+    const releasePill = onTime === true
+      ? `<span class="sc-pill pill-ok">&#10003; On time</span>`
+      : onTime === false
+      ? `<span class="sc-pill pill-late">&#10007; Delayed</span>`
+      : `<span class="sc-pill pill-na">— No release task</span>`;
+    const openTasksHtml = open > 0 ? `
+      <div class="open-tasks">
+        <div class="open-task-lbl">Still open</div>
+        ${s.open_dt.map(t=>`<span class="open-tag">${t.name.slice(0,40)}</span>`).join("")}
+      </div>` : "";
+    const dateStr = (s.startDate && s.dueDate)
+      ? `${fmtDate(s.startDate,false)} – ${fmtDate(s.dueDate,true)}`
+      : s.label;
+    return `
+    <div class="sc ${open>0?'late':'ok'}">
+      <div class="sc-head">
+        <div>
+          <div class="sc-name">${s.label}</div>
+          <div class="sc-dates">${dateStr}</div>
+        </div>
+        ${releasePill}
+      </div>
+      <div class="sc-body">
+        <div class="sc-stats">
+          <div class="sc-stat"><div class="sc-stat-val" style="color:#1e293b">${total}</div><div class="sc-stat-lbl">Total DT</div></div>
+          <div class="sc-stat"><div class="sc-stat-val" style="color:#27500A">${done}</div><div class="sc-stat-lbl">Completed</div></div>
+          <div class="sc-stat"><div class="sc-stat-val" style="color:${open>0?'#633806':'#94a3b8'}">${open}</div><div class="sc-stat-lbl">Still open</div></div>
+        </div>
+        <div class="sc-sep"></div>
+        <div class="pbar-row"><span>Completion</span><span style="font-weight:500;color:${pct===100?'#27500A':'#633806'}">${pct}%</span></div>
+        <div class="pbar-bg"><div class="pbar-fill" style="width:${pct}%;background:${pct===100?'#639922':'#BA7517'}"></div></div>
+        ${openTasksHtml}
+      </div>
+    </div>`;
+  }).join("");
+
+  // ── Trend chart bars ──────────────────────────────────────────────────────
+  const maxTasks = Math.max(...sprints.map(s=>s.dt_tasks.length), 1);
+  const chartBars = sprints.map(s => {
+    const total   = s.dt_tasks.length;
+    const done    = s.done_dt.length;
+    const open    = s.open_dt.length;
+    const pct     = total ? Math.round(done/total*100) : 0;
+    const doneH   = Math.round((done/maxTasks)*90);
+    const openH   = Math.round((open/maxTasks)*90);
+    const color   = pct===100?'#639922':'#BA7517';
+    return `
+    <div class="bar-group">
+      <div style="display:flex;flex-direction:column-reverse;align-items:stretch;width:100%;gap:1px;height:90px">
+        <div style="height:${doneH}px;background:${color};border-radius:${openH?'0':'4px 4px 0 0'}"></div>
+        ${openH ? `<div style="height:${openH}px;background:#E24B4A;border-radius:4px 4px 0 0"></div>` : ''}
+      </div>
+      <div class="bar-lbl">${s.label}</div>
+      <div class="bar-pct" style="color:${pct===100?'#27500A':'#633806'}">${pct}%</div>
+    </div>`;
+  }).join("");
+
+  // ── Bug table — 2 columns ─────────────────────────────────────────────────
+  const half = Math.ceil(bugTasks.length/2);
+  const col1 = bugTasks.slice(0, half);
+  const col2 = bugTasks.slice(half);
+  const bugStatus = (b) => {
+    const s = b.status.toLowerCase();
+    if(["completed","closed","user error"].includes(s)) return `<span class="pill pill-grn">Resolved</span>`;
+    if(s.includes("review")) return `<span class="pill pill-amb">In review</span>`;
+    return `<span class="pill pill-red">Active</span>`;
+  };
+  const bugRowHtml = (b) => `
+    <div class="bug-row">
+      <a class="bug-id" href="${b.url}" target="_blank">${b.customId}</a>
+      <div class="bug-info">
+        <div class="bug-name">${b.name.replace(/BUG:\s*/i,"").slice(0,55)}</div>
+        <div class="bug-meta">${bugStatus(b)}</div>
+      </div>
+    </div>`;
+
+  // ── CSS ───────────────────────────────────────────────────────────────────
+  const CSS = `
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Inter',sans-serif;background:#f1f5f9;color:#1e293b;padding:32px 16px;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+.wrap{max-width:920px;margin:0 auto;background:#fff;border-radius:16px;overflow:hidden;border:1px solid #e2e8f0}
+.header{background:#1e1b4b;padding:32px 40px 28px}
+.logo-row{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}
+.logo{font-size:11px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:#a5b4fc;font-family:'DM Mono',monospace}
+.qbadge{background:rgba(255,255,255,0.12);border:1px solid rgba(255,255,255,0.18);border-radius:20px;padding:3px 12px;font-size:10px;color:#c7d2fe;letter-spacing:1px}
+h1{font-size:24px;font-weight:700;color:#fff;margin-bottom:5px}
+h1 span{color:#a5b4fc}
+.hsub{color:#c7d2fe;font-size:12px;line-height:1.6;margin-bottom:16px}
+.hpills{display:flex;flex-wrap:wrap;gap:7px}
+.hpill{display:flex;align-items:center;gap:5px;background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.12);border-radius:7px;padding:4px 10px;font-size:11px;color:#e0e7ff}
+.hpill strong{color:#fff}
+.hdot{width:6px;height:6px;border-radius:50%;flex-shrink:0}
+.body{padding:28px 40px}
+.sec-lbl{font-size:9px;font-weight:500;text-transform:uppercase;letter-spacing:0.12em;color:#94a3b8;margin-bottom:12px}
+.kpi-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:9px;margin-bottom:0}
+.kpi{background:#f8fafc;border-radius:8px;padding:14px 16px}
+.kpi-val{font-size:26px;font-weight:700;line-height:1;margin-bottom:3px}
+.kpi-lbl{font-size:11px;color:#64748b}
+.kpi-sub{font-size:10px;color:#94a3b8;margin-top:1px}
+.divider{height:1px;background:#e2e8f0;margin:24px 0}
+.sprint-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+.sc{border:1px solid #e2e8f0;border-radius:12px;background:#fff;overflow:hidden}
+.sc.ok{border-color:#C0DD97}
+.sc.late{border-color:#FAC775}
+.sc-head{padding:12px 14px 10px;border-bottom:1px solid #e2e8f0;display:flex;align-items:flex-start;justify-content:space-between;gap:8px}
+.sc-name{font-size:15px;font-weight:700;margin-bottom:2px}
+.sc-dates{font-size:10px;color:#94a3b8;font-family:'DM Mono',monospace}
+.sc-body{padding:12px 14px}
+.sc-stats{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:10px}
+.sc-stat{text-align:center}
+.sc-stat-val{font-size:18px;font-weight:700;line-height:1;margin-bottom:2px}
+.sc-stat-lbl{font-size:9px;color:#94a3b8;text-transform:uppercase;letter-spacing:0.06em}
+.sc-sep{height:1px;background:#e2e8f0;margin-bottom:10px}
+.pbar-bg{height:4px;border-radius:2px;background:#e2e8f0;overflow:hidden;margin-bottom:4px}
+.pbar-fill{height:100%;border-radius:2px}
+.pbar-row{display:flex;justify-content:space-between;font-size:10px;color:#64748b;margin-bottom:6px}
+.sc-pill{font-size:9px;font-weight:500;padding:2px 8px;border-radius:20px;font-family:'DM Mono',monospace;white-space:nowrap}
+.pill-ok{background:#EAF3DE;color:#27500A;border:1px solid #C0DD97}
+.pill-late{background:#FAEEDA;color:#633806;border:1px solid #FAC775}
+.pill-na{background:#f1f5f9;color:#94a3b8;border:1px solid #e2e8f0}
+.open-tasks{margin-top:8px;padding-top:8px;border-top:1px dashed #e2e8f0}
+.open-task-lbl{font-size:9px;color:#94a3b8;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:4px}
+.open-tag{display:inline-block;font-size:10px;color:#633806;background:#FAEEDA;border:1px solid #FAC775;border-radius:4px;padding:2px 7px;margin:2px 2px 0 0;line-height:1.5}
+.chart-card{background:#fff;border:1px solid #e2e8f0;border-radius:12px;overflow:hidden}
+.card{background:#fff;border:1px solid #e2e8f0;border-radius:12px;overflow:hidden}
+.ch{padding:10px 14px;border-bottom:1px solid #e2e8f0;display:flex;align-items:center;justify-content:space-between}
+.ct{font-size:13px;font-weight:600}
+.cbadge{font-size:10px;padding:2px 8px;border-radius:20px;font-weight:500}
+.chart-body{padding:18px 20px 14px}
+.bars-wrap{display:flex;align-items:flex-end;gap:10px;height:110px;margin-bottom:10px}
+.bar-group{flex:1;display:flex;flex-direction:column;align-items:center}
+.bar-lbl{font-size:10px;color:#94a3b8;font-family:'DM Mono',monospace;margin-top:5px;text-align:center}
+.bar-pct{font-size:9px;font-weight:500;text-align:center}
+.chart-legend{display:flex;gap:14px}
+.leg-item{display:flex;align-items:center;gap:5px;font-size:11px;color:#64748b}
+.leg-dot{width:10px;height:10px;border-radius:3px}
+table{width:100%;border-collapse:collapse}
+.member-table th{text-align:left;font-size:9px;text-transform:uppercase;letter-spacing:0.08em;color:#94a3b8;font-weight:500;padding:0 12px 8px;border-bottom:1px solid #e2e8f0}
+.member-table td{padding:9px 12px;border-bottom:1px solid #f1f5f9;font-size:12px;vertical-align:middle}
+.member-table tr:last-child td{border-bottom:none}
+.av{width:26px;height:26px;border-radius:7px;display:inline-flex;align-items:center;justify-content:center;font-size:9px;font-weight:600}
+.mini-bar{height:4px;border-radius:2px;background:#e2e8f0;overflow:hidden;width:54px;display:inline-block;vertical-align:middle}
+.mini-fill{height:100%;border-radius:2px}
+.bug-table-wrap{display:grid;grid-template-columns:1fr 1fr}
+.bug-col{border-right:1px solid #e2e8f0}
+.bug-col:last-child{border-right:none}
+.bug-row{display:flex;align-items:flex-start;gap:8px;padding:8px 14px;border-bottom:1px solid #f1f5f9}
+.bug-row:last-child{border-bottom:none}
+.bug-id{font-family:'DM Mono',monospace;font-size:10px;color:#185FA5;min-width:72px;flex-shrink:0;padding-top:1px;text-decoration:none}
+.bug-info{flex:1}
+.bug-name{font-size:11px;color:#1e293b;line-height:1.4;margin-bottom:2px}
+.bug-meta{display:flex;gap:5px}
+.pill{display:inline-block;font-size:9px;padding:2px 7px;border-radius:20px;font-weight:500}
+.pill-grn{background:#EAF3DE;color:#27500A}
+.pill-amb{background:#FAEEDA;color:#633806}
+.pill-red{background:#FCEBEB;color:#791F1F}
+.hl-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.hl{display:flex;gap:10px;padding:12px 14px;border-radius:8px;border:1px solid #e2e8f0;background:#f8fafc}
+.hl-icon{width:28px;height:28px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:13px;flex-shrink:0}
+.hl-title{font-size:12px;font-weight:600;margin-bottom:3px}
+.hl-sub{font-size:11px;color:#64748b;line-height:1.5}
+.ann-block{border:1px dashed #cbd5e1;border-radius:8px;padding:11px 13px;background:#f8fafc}
+.ann-lbl{font-size:9px;font-weight:500;text-transform:uppercase;letter-spacing:0.08em;color:#94a3b8;margin-bottom:6px}
+.ann-ta{width:100%;padding:8px 10px;border-radius:6px;border:1px solid #e2e8f0;background:#fff;font-size:12px;color:#1e293b;font-family:'Inter',sans-serif;resize:vertical;min-height:64px;outline:none;line-height:1.5}
+.footer{background:#f8fafc;border-top:1px solid #e2e8f0;padding:13px 40px;display:flex;justify-content:space-between;align-items:center;font-size:10px;color:#94a3b8;font-family:'DM Mono',monospace}
+.footer strong{color:#534AB7}
+@media print{body{padding:0;background:#fff}.wrap{border-radius:0;border:none}}`;
+
+  return `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>iDerive Quarterly Update — ${quarter}</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>${CSS}</style></head>
+<body><div class="wrap">
+
+<div class="header">
+  <div class="logo-row"><div class="logo">iDerive</div><span class="qbadge">${quarter}</span></div>
+  <h1>Quarterly Progress <span>Update</span></h1>
+  <p class="hsub">Decision Tree team · ${sprintNames} · ${sprints.length} sprints · Source: ClickUp · DT assignees only</p>
+  <div class="hpills">
+    <div class="hpill"><div class="hdot" style="background:#60a5fa"></div><strong>${sprints.length}</strong> sprints completed</div>
+    <div class="hpill"><div class="hdot" style="background:#34d399"></div><strong>${totalDt}</strong> DT tasks · ${compPct}% complete</div>
+    <div class="hpill"><div class="hdot" style="background:#fbbf24"></div><strong>${totalOpen}</strong> carry-overs</div>
+    <div class="hpill"><div class="hdot" style="background:#f87171"></div><strong>${bugTasks.length}</strong> bugs · ${bugResolved.length} resolved</div>
+    <div class="hpill"><div class="hdot" style="background:#a78bfa"></div><strong>${onTimeCount}/${sprints.length}</strong> releases on time</div>
+  </div>
+</div>
+
+<div class="body">
+
+  <div class="sec-lbl">Quarter at a glance</div>
+  <div class="kpi-grid" style="margin-bottom:0">
+    <div class="kpi"><div class="kpi-val" style="color:#185FA5">${totalDt}</div><div class="kpi-lbl">Total DT tasks</div><div class="kpi-sub">${sprints.length} sprints</div></div>
+    <div class="kpi"><div class="kpi-val" style="color:#27500A">${totalDone}</div><div class="kpi-lbl">Completed</div><div class="kpi-sub">${compPct}% rate</div></div>
+    <div class="kpi"><div class="kpi-val" style="color:#633806">${totalOpen}</div><div class="kpi-lbl">Carry-overs</div><div class="kpi-sub">into next quarter</div></div>
+    <div class="kpi"><div class="kpi-val" style="color:#791F1F">${bugTasks.length}</div><div class="kpi-lbl">Bugs raised</div><div class="kpi-sub">${bugResolved.length} resolved (${bugResPct}%)</div></div>
+    <div class="kpi"><div class="kpi-val" style="color:#534AB7">${sprints.length?Math.round(onTimeCount/sprints.length*100):0}%</div><div class="kpi-lbl">On-time releases</div><div class="kpi-sub">${onTimeCount} of ${sprints.length} sprints</div></div>
+  </div>
+
+  <div class="divider"></div>
+
+  <div class="sec-lbl">Sprint-by-sprint summary</div>
+  <div class="sprint-grid">${sprintCards}</div>
+
+  <div class="divider"></div>
+
+  <div class="sec-lbl">Completion trend</div>
+  <div class="chart-card">
+    <div class="chart-body">
+      <div class="bars-wrap">${chartBars}</div>
+      <div class="chart-legend">
+        <div class="leg-item"><div class="leg-dot" style="background:#639922"></div>Completed</div>
+        <div class="leg-item"><div class="leg-dot" style="background:#E24B4A"></div>Still open</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="divider"></div>
+
+  <div class="sec-lbl">Member contribution</div>
+  <div class="card">
+    <table class="member-table">
+      <thead><tr><th style="width:170px">Member</th><th>Tasks</th><th>Completed</th><th>Open</th><th>Bugs</th><th>Completion</th><th>Sprints</th></tr></thead>
+      <tbody>
+        ${(() => {
+          const memberMap = {};
+          for(const s of sprints) {
+            for(const t of s.dt_tasks) {
+              for(const a of t.assignees||[]) {
+                if(!a.email) continue;
+                const name = a.username || a.email.split("@")[0];
+                if(!memberMap[name]) memberMap[name] = { tasks:0, done:0, open:0, bugs:0, sprints: new Set(), color: ["#5b5ff5","#D4537E","#1D9E75","#BA7517","#7c3aed","#0284c7"][Object.keys(memberMap).length%6] };
+                memberMap[name].tasks++;
+                if(isClosed(t.status)) memberMap[name].done++;
+                else memberMap[name].open++;
+                memberMap[name].sprints.add(s.label);
+              }
+            }
+          }
+          for(const b of bugTasks) {
+            for(const a of b.assignees||[]) {
+              const name = a.username || a.email?.split("@")[0];
+              if(name && memberMap[name]) memberMap[name].bugs++;
+            }
+          }
+          return Object.entries(memberMap).sort((a,b)=>b[1].tasks-a[1].tasks).map(([name,m])=>{
+            const pct    = m.tasks ? Math.round(m.done/m.tasks*100) : 0;
+            const color  = m.color;
+            const ini    = name.split(" ").map(p=>p[0]).slice(0,2).join("").toUpperCase();
+            const spList = [...m.sprints].join(", ");
+            return `<tr>
+              <td><div style="display:flex;align-items:center;gap:8px"><div class="av" style="background:${color}22;color:${color}">${ini}</div>${name}</div></td>
+              <td><strong>${m.tasks}</strong></td>
+              <td style="color:#27500A"><strong>${m.done}</strong></td>
+              <td style="color:${m.open>0?'#633806':'#94a3b8'}">${m.open>0?`<strong>${m.open}</strong>`:0}</td>
+              <td>${m.bugs}</td>
+              <td><div style="display:flex;align-items:center;gap:7px"><div class="mini-bar"><div class="mini-fill" style="width:${pct}%;background:${pct===100?'#639922':'#BA7517'}"></div></div><span style="font-size:11px;font-weight:500;color:${pct===100?'#27500A':'#633806'}">${pct}%</span></div></td>
+              <td style="font-size:11px;color:#64748b">${spList}</td>
+            </tr>`;
+          }).join("");
+        })()}
+      </tbody>
+    </table>
+  </div>
+
+  ${bugTasks.length ? `
+  <div class="divider"></div>
+  <div class="sec-lbl">Bug summary — ${quarter}</div>
+  <div class="card">
+    <div class="ch">
+      <span class="ct">All DT bugs this quarter</span>
+      <span class="cbadge" style="background:#FCEBEB;color:#791F1F;border:1px solid #F7C1C1">${bugTasks.length} bugs · ${bugResolved.length} resolved</span>
+    </div>
+    <div class="bug-table-wrap">
+      <div class="bug-col">${col1.map(bugRowHtml).join("")}</div>
+      <div class="bug-col">${col2.map(bugRowHtml).join("")}</div>
+    </div>
+  </div>` : ""}
+
+  <div class="divider"></div>
+
+  <div class="sec-lbl">Quarter highlights</div>
+  <div class="hl-grid">
+    <div class="hl">
+      <div class="hl-icon" style="background:#EAF3DE">&#10003;</div>
+      <div><div class="hl-title">${compPct}% task completion across the quarter</div>
+      <div class="hl-sub">${totalDone} of ${totalDt} DT tasks completed. ${sprints.filter(s=>s.open_dt.length===0).map(s=>s.label).join(", ")||"None"} fully closed with zero carry-overs.</div></div>
+    </div>
+    <div class="hl">
+      <div class="hl-icon" style="background:${onTimeCount===sprints.length?'#EAF3DE':'#FAEEDA'}">${onTimeCount===sprints.length?'&#10003;':'!'}</div>
+      <div><div class="hl-title">${onTimeCount} of ${sprints.length} releases on time</div>
+      <div class="hl-sub">${onTimeCount===sprints.length?'All releases completed on schedule this quarter.':sprints.filter(s=>{const d=s.dt_tasks.find(t=>isDeployTask(t.name))||s.next_sprint_deploy_task;if(!d)return false;const dl=s.startDate;const cp=d.dateUpdated;return dl&&cp?cp>dl:false;}).map(s=>s.label).join(", ")+' had delayed releases.'}</div></div>
+    </div>
+    <div class="hl">
+      <div class="hl-icon" style="background:#FCEBEB">&#128027;</div>
+      <div><div class="hl-title">${bugTasks.length} bugs raised — ${bugResPct}% resolved</div>
+      <div class="hl-sub">${bugActive.length} bug${bugActive.length!==1?'s':''} remain${bugActive.length===1?'s':''} active. ${bugReview.length} under review heading into next quarter.</div></div>
+    </div>
+    <div class="hl">
+      <div class="hl-icon" style="background:#E6F1FB">&#8594;</div>
+      <div><div class="hl-title">${totalOpen} task${totalOpen!==1?'s':''} carry forward</div>
+      <div class="hl-sub">${sprints.filter(s=>s.open_dt.length>0).map(s=>`${s.label} (${s.open_dt.length})`).join(", ")||"None"}. All flagged for next quarter prioritisation.</div></div>
+    </div>
+  </div>
+
+  <div class="divider"></div>
+
+  <div class="sec-lbl">Manager notes</div>
+  <div class="ann-block">
+    <div class="ann-lbl">Overall context — key wins, challenges, next quarter priorities</div>
+    <textarea class="ann-ta" placeholder="Add your quarterly summary, key wins, challenges faced, and priorities for next quarter..."></textarea>
+  </div>
+
+</div>
+
+<div class="footer">
+  <span><strong>iDerive</strong> · ${quarter} Quarterly Report · Decision Tree team · Source: ClickUp</span>
+  <span>Generated: ${now} · ${yourName}</span>
+</div>
+
+</div></body></html>`;
+}
+
 export default async function handler(req, res) {
   const allowedOrigins = ["https://rhlsinghal.github.io","http://localhost:3000"];
   const origin = req.headers.origin||"";
@@ -729,9 +1085,21 @@ export default async function handler(req, res) {
       ? sprintNames.join(", ")
       : (req.body?.monthLabel || month);
 
-    const html = buildHtml(sprints,bugTasks,{month:reportMonth,yourName,managerName});
+    const isQuarterly = req.body?.reportType === "quarterly";
+    const quarterLabel = req.body?.quarterLabel || reportMonth;
 
-    res.status(200).json({html, sprints:sprints.length, bugs:bugTasks.length, month:reportMonth, sprintNames});
+    const html = isQuarterly
+      ? buildQuarterlyHtml(sprints, bugTasks, { quarter: quarterLabel, yourName, managerName })
+      : buildHtml(sprints, bugTasks, { month: reportMonth, yourName, managerName });
+
+    res.status(200).json({
+      html,
+      sprints:     sprints.length,
+      bugs:        bugTasks.length,
+      month:       reportMonth,
+      quarter:     isQuarterly ? quarterLabel : null,
+      sprintNames,
+    });
 
   } catch(e){
     console.error("ClickUp error:",e);
