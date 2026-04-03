@@ -701,24 +701,21 @@ function buildQuarterlyHtml(sprints, bugTasks, { quarter, yourName, managerName 
   const half = Math.ceil(bugTasks.length/2);
   const col1 = bugTasks.slice(0, half);
   const col2 = bugTasks.slice(half);
-  const bugStatus = (b) => {
+  // Use raw ClickUp status as filter key so ALL statuses are filterable
+  const getBugFilterKey = (b) => b.status.toLowerCase().trim().replace(/\s+/g,"-");
+  const bugStatusLabel  = (b) => {
     const s = b.status.toLowerCase();
-    if(["completed","closed","user error"].includes(s)) return `<span class="pill pill-grn">Resolved</span>`;
-    if(s.includes("review")) return `<span class="pill pill-amb">In review</span>`;
-    return `<span class="pill pill-red">Active</span>`;
-  };
-  const getBugFilterKey = (b) => {
-    const s = b.status.toLowerCase();
-    if(["completed","closed","user error"].includes(s)) return "resolved";
-    if(s.includes("review")) return "review";
-    return "active";
+    if(["completed","closed","user error"].includes(s)) return `<span class="pill pill-grn">${b.status}</span>`;
+    if(s.includes("review"))                            return `<span class="pill pill-amb">${b.status}</span>`;
+    if(s.includes("done")||s.includes("resolved"))      return `<span class="pill pill-grn">${b.status}</span>`;
+    return `<span class="pill pill-red">${b.status}</span>`;
   };
   const bugRowHtml = (b) => `
     <div class="bug-row" data-status="${getBugFilterKey(b)}">
       <a class="bug-id" href="${b.url}" target="_blank">${b.customId}</a>
       <div class="bug-info">
         <div class="bug-name">${b.name.replace(/BUG:\s*/i,"").slice(0,55)}</div>
-        <div class="bug-meta">${bugStatus(b)}</div>
+        <div class="bug-meta">${bugStatusLabel(b)}</div>
       </div>
     </div>`;
 
@@ -880,12 +877,22 @@ table{width:100%;border-collapse:collapse}
     <div class="ch">
       <span class="ct">All DT bugs this quarter</span>
       <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
-        <span class="cbadge" style="background:#FCEBEB;color:#791F1F;border:1px solid #F7C1C1">${bugTasks.length} bugs · ${bugResolved.length} resolved</span>
+        <span class="cbadge" style="background:#FCEBEB;color:#791F1F;border:1px solid #F7C1C1">${bugTasks.length} bugs · ${bugTasks.filter(b=>{const s=b.status.toLowerCase();return["completed","closed","user error"].includes(s)||s.includes("done")||s.includes("resolved");}).length} resolved</span>
         <div class="bug-filters">
           <button class="bf-btn bf-active" onclick="bugFilter('all')">All (${bugTasks.length})</button>
-          <button class="bf-btn" onclick="bugFilter('active')">Active (${bugActive.length})</button>
-          <button class="bf-btn" onclick="bugFilter('review')">In review (${bugReview.length})</button>
-          <button class="bf-btn" onclick="bugFilter('resolved')">Resolved (${bugResolved.length})</button>
+          ${(() => {
+            // Build one button per unique raw status, in order of first appearance
+            const seen = new Map();
+            bugTasks.forEach(b => {
+              const key   = getBugFilterKey(b);
+              const label = b.status;
+              if(!seen.has(key)) seen.set(key, { label, count: 0 });
+              seen.get(key).count++;
+            });
+            return [...seen.entries()].map(([key, {label, count}]) =>
+              `<button class="bf-btn" onclick="bugFilter('${key}')">${label} (${count})</button>`
+            ).join("");
+          })()}
         </div>
       </div>
     </div>
