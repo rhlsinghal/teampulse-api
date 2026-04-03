@@ -578,7 +578,20 @@ tr:hover td{background:#f8fafc}
   document.addEventListener("DOMContentLoaded", attachSaveBtn);
 })();
 </script>
-</div></body></html>`;
+</div>
+<script>
+function bugFilter(type) {
+  var rows = document.querySelectorAll("#bug-list .bug-row");
+  rows.forEach(function(row) {
+    var status = row.getAttribute("data-status");
+    row.style.display = (type === "all" || status === type) ? "" : "none";
+  });
+  document.querySelectorAll(".bf-btn").forEach(function(btn) {
+    btn.classList.toggle("bf-active", btn.getAttribute("onclick") === "bugFilter('" + type + "')");
+  });
+}
+</script>
+</body></html>`;
 }
 
 
@@ -623,7 +636,9 @@ function buildQuarterlyHtml(sprints, bugTasks, { quarter, yourName, managerName 
     const openTasksHtml = open > 0 ? `
       <div class="open-tasks">
         <div class="open-task-lbl">Still open</div>
-        ${s.open_dt.map(t=>`<span class="open-tag">${t.name.slice(0,40)}</span>`).join("")}
+        ${s.open_dt.map(t=>`<a class="open-tag" href="${t.url}" target="_blank" title="${t.name}">
+          <span class="open-tag-id">${t.customId}</span>${t.name.slice(0,38)}
+        </a>`).join("")}
       </div>` : "";
     const dateStr = (s.startDate && s.dueDate)
       ? `${fmtDate(s.startDate,false)} – ${fmtDate(s.dueDate,true)}`
@@ -682,8 +697,14 @@ function buildQuarterlyHtml(sprints, bugTasks, { quarter, yourName, managerName 
     if(s.includes("review")) return `<span class="pill pill-amb">In review</span>`;
     return `<span class="pill pill-red">Active</span>`;
   };
+  const getBugFilterKey = (b) => {
+    const s = b.status.toLowerCase();
+    if(["completed","closed","user error"].includes(s)) return "resolved";
+    if(s.includes("review")) return "review";
+    return "active";
+  };
   const bugRowHtml = (b) => `
-    <div class="bug-row">
+    <div class="bug-row" data-status="${getBugFilterKey(b)}">
       <a class="bug-id" href="${b.url}" target="_blank">${b.customId}</a>
       <div class="bug-info">
         <div class="bug-name">${b.name.replace(/BUG:\s*/i,"").slice(0,55)}</div>
@@ -779,6 +800,17 @@ table{width:100%;border-collapse:collapse}
 .ann-block{border:1px dashed #cbd5e1;border-radius:8px;padding:11px 13px;background:#f8fafc}
 .ann-lbl{font-size:9px;font-weight:500;text-transform:uppercase;letter-spacing:0.08em;color:#94a3b8;margin-bottom:6px}
 .ann-ta{width:100%;padding:8px 10px;border-radius:6px;border:1px solid #e2e8f0;background:#fff;font-size:12px;color:#1e293b;font-family:'Inter',sans-serif;resize:vertical;min-height:64px;outline:none;line-height:1.5}
+.open-tag{display:inline-flex;align-items:center;gap:4px;font-size:10px;color:#633806;background:#FAEEDA;border:1px solid #FAC775;border-radius:4px;padding:2px 8px;margin:2px 2px 0 0;line-height:1.5;text-decoration:none;cursor:pointer}
+.open-tag:hover{background:#FDE68A;border-color:#F59E0B}
+.open-tag-id{font-family:'DM Mono',monospace;font-size:9px;color:#854F0B;font-weight:600;background:rgba(0,0,0,0.06);padding:1px 4px;border-radius:3px;margin-right:2px}
+.bug-filters{display:flex;gap:4px;flex-wrap:wrap}
+.bf-btn{font-size:10px;padding:2px 9px;border-radius:20px;border:1px solid #e2e8f0;background:#f8fafc;color:#64748b;cursor:pointer;font-family:'Inter',sans-serif;font-weight:500}
+.bf-btn:hover{background:#f1f5f9}
+.bf-btn.bf-active{background:#1e1b4b;color:#fff;border-color:#1e1b4b}
+.bug-list{padding:0}
+.bug-row{display:flex;align-items:flex-start;gap:8px;padding:8px 14px;border-bottom:1px solid #f1f5f9}
+.bug-row:last-child{border-bottom:none}
+.bug-row[style*="display:none"]{display:none!important}
 .footer{background:#f8fafc;border-top:1px solid #e2e8f0;padding:13px 40px;display:flex;justify-content:space-between;align-items:center;font-size:10px;color:#94a3b8;font-family:'DM Mono',monospace}
 .footer strong{color:#534AB7}
 @media print{body{padding:0;background:#fff}.wrap{border-radius:0;border:none}}`;
@@ -837,11 +869,18 @@ table{width:100%;border-collapse:collapse}
   <div class="card">
     <div class="ch">
       <span class="ct">All DT bugs this quarter</span>
-      <span class="cbadge" style="background:#FCEBEB;color:#791F1F;border:1px solid #F7C1C1">${bugTasks.length} bugs · ${bugResolved.length} resolved</span>
+      <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+        <span class="cbadge" style="background:#FCEBEB;color:#791F1F;border:1px solid #F7C1C1">${bugTasks.length} bugs · ${bugResolved.length} resolved</span>
+        <div class="bug-filters">
+          <button class="bf-btn bf-active" onclick="bugFilter('all')">All (${bugTasks.length})</button>
+          <button class="bf-btn" onclick="bugFilter('active')">Active (${bugActive.length})</button>
+          <button class="bf-btn" onclick="bugFilter('review')">In review (${bugReview.length})</button>
+          <button class="bf-btn" onclick="bugFilter('resolved')">Resolved (${bugResolved.length})</button>
+        </div>
+      </div>
     </div>
-    <div class="bug-table-wrap">
-      <div class="bug-col">${col1.map(bugRowHtml).join("")}</div>
-      <div class="bug-col">${col2.map(bugRowHtml).join("")}</div>
+    <div class="bug-list" id="bug-list">
+      ${bugTasks.map(bugRowHtml).join("")}
     </div>
   </div>` : ""}
 
@@ -886,7 +925,20 @@ table{width:100%;border-collapse:collapse}
   <span>Generated: ${now} · ${yourName}</span>
 </div>
 
-</div></body></html>`;
+</div>
+<script>
+function bugFilter(type) {
+  var rows = document.querySelectorAll("#bug-list .bug-row");
+  rows.forEach(function(row) {
+    var status = row.getAttribute("data-status");
+    row.style.display = (type === "all" || status === type) ? "" : "none";
+  });
+  document.querySelectorAll(".bf-btn").forEach(function(btn) {
+    btn.classList.toggle("bf-active", btn.getAttribute("onclick") === "bugFilter('" + type + "')");
+  });
+}
+</script>
+</body></html>`;
 }
 
 export default async function handler(req, res) {
