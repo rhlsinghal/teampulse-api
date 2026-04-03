@@ -313,20 +313,31 @@ function buildHtml(sprints, bugTasks, { month, yourName, managerName }) {
             </select>
           </div>
         </div>
-        <div class="bug-ann-stack">
-          <div class="ann-block bug-ann-block">
-            <div class="ann-label bug-ann-label">
-              <span class="ann-icon bug-ann-icon">&#9998;</span>
-              Root cause note
+        <div class="bug-tl">
+          <div class="bug-tl-item">
+            <div class="bug-tl-left">
+              <div class="bug-tl-dot bug-tl-dot-r">R</div>
+              <div class="bug-tl-line"></div>
             </div>
-            <textarea class="ann-ta" placeholder="Why was this bug raised? e.g. regression, missing validation, edge case..."></textarea>
+            <div class="bug-tl-body">
+              <div class="ann-label bug-ann-label">
+                <span class="ann-icon bug-ann-icon">&#9998;</span>
+                Root cause note
+              </div>
+              <textarea class="ann-ta" placeholder="Why was this bug raised? e.g. regression, missing validation, edge case..."></textarea>
+            </div>
           </div>
-          <div class="ann-block bug-ann-block">
-            <div class="ann-label bug-ann-label" style="color:#0369a1">
-              <span class="ann-icon bug-ann-icon" style="background:#0369a1">&#8594;</span>
-              Next actions
+          <div class="bug-tl-item">
+            <div class="bug-tl-left">
+              <div class="bug-tl-dot bug-tl-dot-n">N</div>
             </div>
-            <textarea class="ann-ta" placeholder="What are the next steps to resolve or prevent this bug?"></textarea>
+            <div class="bug-tl-body">
+              <div class="ann-label bug-ann-label" style="color:#0F6E56">
+                <span class="ann-icon bug-ann-icon" style="background:#0F6E56">&#8594;</span>
+                Next actions
+              </div>
+              <textarea class="ann-ta" style="border-color:#9FE1CB" placeholder="What are the next steps to resolve or prevent this bug?"></textarea>
+            </div>
           </div>
         </div>
       </div>`;
@@ -443,7 +454,14 @@ tr:hover td{background:#f8fafc}
 .bug-cat-wrap{display:inline-block}
 .ann-sel{font-size:12px;padding:5px 10px;border-radius:6px;border:1px solid #c4b5fd;background:#f5f3ff;color:#4c1d95;font-family:'Inter',sans-serif;cursor:pointer;outline:none;min-width:200px}
 .ann-sel:focus{border-color:#7c3aed}
-.bug-ann-stack{display:flex;flex-direction:column;gap:8px;margin-top:10px}
+.bug-tl{margin-top:12px;padding:0 2px}
+.bug-tl-item{display:flex;gap:12px}
+.bug-tl-left{display:flex;flex-direction:column;align-items:center;width:22px;flex-shrink:0}
+.bug-tl-dot{width:18px;height:18px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:8px;font-weight:600;flex-shrink:0;font-family:'DM Mono','Inter',sans-serif}
+.bug-tl-dot-r{background:#7c3aed;color:#fff}
+.bug-tl-dot-n{background:#0F6E56;color:#fff}
+.bug-tl-line{width:1px;flex:1;background:#e2e8f0;margin:3px 0}
+.bug-tl-body{flex:1;padding-bottom:14px}
 .overall-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:14px}
 .overall-card{background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:14px 16px}
 .oc-title{font-size:9px;font-family:'DM Mono',monospace;color:#94a3b8;text-transform:uppercase;letter-spacing:.8px;margin-bottom:8px}
