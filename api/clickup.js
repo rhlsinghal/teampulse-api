@@ -284,6 +284,19 @@ function buildHtml(sprints, bugTasks, { month, yourName, managerName }) {
   }).join("\n");
 
   // ── Bug section ──
+  const BUG_CATEGORIES = [
+    "— Select category —",
+    "Regression",
+    "Missing validation",
+    "Edge case",
+    "Data pipeline issue",
+    "UI / display issue",
+    "Integration issue",
+    "Performance",
+    "Configuration error",
+    "Third-party dependency",
+    "Other",
+  ];
   const bugBlocks = bugTasks.map(b => {
     const name = b.name.replace(/BUG:\s*/i,"");
     return `
@@ -294,12 +307,32 @@ function buildHtml(sprints, bugTasks, { month, yourName, managerName }) {
           ${statusPill(b.status)}
           <span class="assignee-text">${fmtAssignees(b.assignees, b.watchers)}</span>
         </div>
-        <div class="ann-block bug-ann-block">
-          <div class="ann-label bug-ann-label">
-            <span class="ann-icon bug-ann-icon">&#9998;</span>
-            Root cause note
+        <div class="bug-meta-row">
+          <div class="bug-cat-wrap">
+            <div class="ann-label bug-ann-label" style="margin-bottom:5px">
+              <span class="ann-icon bug-ann-icon">&#9632;</span>
+              Bug category
+            </div>
+            <select class="ann-sel bug-cat-sel">
+              ${BUG_CATEGORIES.map(c=>`<option value="${c}">${c}</option>`).join("")}
+            </select>
           </div>
-          <textarea class="ann-ta" placeholder="Why was this bug raised? e.g. regression, missing validation, edge case..."></textarea>
+        </div>
+        <div class="bug-ann-grid">
+          <div class="ann-block bug-ann-block">
+            <div class="ann-label bug-ann-label">
+              <span class="ann-icon bug-ann-icon">&#9998;</span>
+              Root cause note
+            </div>
+            <textarea class="ann-ta" placeholder="Why was this bug raised? e.g. regression, missing validation, edge case..."></textarea>
+          </div>
+          <div class="ann-block bug-ann-block">
+            <div class="ann-label bug-ann-label" style="color:#0369a1">
+              <span class="ann-icon bug-ann-icon" style="background:#0369a1">&#8594;</span>
+              Next actions
+            </div>
+            <textarea class="ann-ta" placeholder="What are the next steps to resolve or prevent this bug?"></textarea>
+          </div>
         </div>
       </div>`;
   }).join("\n");
@@ -411,6 +444,11 @@ tr:hover td{background:#f8fafc}
 .bug-ann-block{background:#f5f3ff;border-color:#c4b5fd}
 .bug-ann-label{color:#7c3aed}
 .bug-ann-icon{background:#7c3aed}
+.bug-meta-row{margin-top:10px}
+.bug-cat-wrap{display:inline-block}
+.ann-sel{font-size:12px;padding:5px 10px;border-radius:6px;border:1px solid #c4b5fd;background:#f5f3ff;color:#4c1d95;font-family:'Inter',sans-serif;cursor:pointer;outline:none;min-width:200px}
+.ann-sel:focus{border-color:#7c3aed}
+.bug-ann-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px}
 .overall-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:14px}
 .overall-card{background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:14px 16px}
 .oc-title{font-size:9px;font-family:'DM Mono',monospace;color:#94a3b8;text-transform:uppercase;letter-spacing:.8px;margin-bottom:8px}
