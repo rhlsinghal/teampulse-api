@@ -701,13 +701,17 @@ function buildQuarterlyHtml(sprints, bugTasks, { quarter, yourName, managerName 
   const half = Math.ceil(bugTasks.length/2);
   const col1 = bugTasks.slice(0, half);
   const col2 = bugTasks.slice(half);
-  // Use raw ClickUp status as filter key so ALL statuses are filterable
-  const getBugFilterKey = (b) => b.status.toLowerCase().trim().replace(/\s+/g,"-");
-  const bugStatusLabel  = (b) => {
-    const s = b.status.toLowerCase();
-    if(["completed","closed","user error"].includes(s)) return `<span class="pill pill-grn">${b.status}</span>`;
-    if(s.includes("review"))                            return `<span class="pill pill-amb">${b.status}</span>`;
-    if(s.includes("done")||s.includes("resolved"))      return `<span class="pill pill-grn">${b.status}</span>`;
+  // Use raw ClickUp status as filter key — merge closed/completed into one bucket
+  const CLOSED_STATUSES = ["completed","closed","done","resolved","user error","accepted","released","deployed","finished"];
+  const getBugFilterKey = (b) => {
+    const s = b.status.toLowerCase().trim();
+    if(CLOSED_STATUSES.some(c => s === c || s.startsWith(c))) return "closed-completed";
+    return s.replace(/\s+/g,"-");
+  };
+  const bugStatusLabel = (b) => {
+    const key = getBugFilterKey(b);
+    if(key === "closed-completed") return `<span class="pill pill-grn">Closed / Completed</span>`;
+    if(b.status.toLowerCase().includes("review")) return `<span class="pill pill-amb">${b.status}</span>`;
     return `<span class="pill pill-red">${b.status}</span>`;
   };
   const bugRowHtml = (b) => `
