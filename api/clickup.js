@@ -581,14 +581,24 @@ tr:hover td{background:#f8fafc}
 </div>
 <script>
 function bugFilter(type) {
+  // Filter rows in both columns
   var rows = document.querySelectorAll("#bug-list .bug-row");
   rows.forEach(function(row) {
     var status = row.getAttribute("data-status");
     row.style.display = (type === "all" || status === type) ? "" : "none";
   });
+  // Update active button
   document.querySelectorAll(".bf-btn").forEach(function(btn) {
     btn.classList.toggle("bf-active", btn.getAttribute("onclick") === "bugFilter('" + type + "')");
   });
+  // Rebalance columns after filter
+  var visible = Array.from(rows).filter(function(r){ return r.style.display !== "none"; });
+  var half = Math.ceil(visible.length / 2);
+  var col1 = document.getElementById("bug-col-1");
+  var col2 = document.getElementById("bug-col-2");
+  if(col1 && col2) {
+    visible.forEach(function(r, i){ (i < half ? col1 : col2).appendChild(r); });
+  }
 }
 </script>
 </body></html>`;
@@ -879,8 +889,9 @@ table{width:100%;border-collapse:collapse}
         </div>
       </div>
     </div>
-    <div class="bug-list" id="bug-list">
-      ${bugTasks.map(bugRowHtml).join("")}
+    <div class="bug-table-wrap" id="bug-list">
+      <div class="bug-col" id="bug-col-1">${bugTasks.slice(0,Math.ceil(bugTasks.length/2)).map(bugRowHtml).join("")}</div>
+      <div class="bug-col" id="bug-col-2">${bugTasks.slice(Math.ceil(bugTasks.length/2)).map(bugRowHtml).join("")}</div>
     </div>
   </div>` : ""}
 
@@ -928,14 +939,24 @@ table{width:100%;border-collapse:collapse}
 </div>
 <script>
 function bugFilter(type) {
+  // Filter rows in both columns
   var rows = document.querySelectorAll("#bug-list .bug-row");
   rows.forEach(function(row) {
     var status = row.getAttribute("data-status");
     row.style.display = (type === "all" || status === type) ? "" : "none";
   });
+  // Update active button
   document.querySelectorAll(".bf-btn").forEach(function(btn) {
     btn.classList.toggle("bf-active", btn.getAttribute("onclick") === "bugFilter('" + type + "')");
   });
+  // Rebalance columns after filter
+  var visible = Array.from(rows).filter(function(r){ return r.style.display !== "none"; });
+  var half = Math.ceil(visible.length / 2);
+  var col1 = document.getElementById("bug-col-1");
+  var col2 = document.getElementById("bug-col-2");
+  if(col1 && col2) {
+    visible.forEach(function(r, i){ (i < half ? col1 : col2).appendChild(r); });
+  }
 }
 </script>
 </body></html>`;
