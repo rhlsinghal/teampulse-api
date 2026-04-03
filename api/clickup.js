@@ -710,8 +710,8 @@ function buildQuarterlyHtml(sprints, bugTasks, { quarter, yourName, managerName 
   };
   const bugStatusLabel = (b) => {
     const key = getBugFilterKey(b);
-    if(key === "closed-completed") return `<span class="pill pill-grn">Closed / Completed</span>`;
-    if(b.status.toLowerCase().includes("review")) return `<span class="pill pill-amb">${b.status}</span>`;
+    if(key === "closed-completed")                        return `<span class="pill pill-grn">${b.status}</span>`;
+    if(b.status.toLowerCase().includes("review"))         return `<span class="pill pill-amb">${b.status}</span>`;
     return `<span class="pill pill-red">${b.status}</span>`;
   };
   const bugRowHtml = (b) => `
