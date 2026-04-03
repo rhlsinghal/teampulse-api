@@ -286,16 +286,11 @@ function buildHtml(sprints, bugTasks, { month, yourName, managerName }) {
   // ── Bug section ──
   const BUG_CATEGORIES = [
     "— Select category —",
-    "Regression",
-    "Missing validation",
-    "Edge case",
-    "Data pipeline issue",
-    "UI / display issue",
-    "Integration issue",
-    "Performance",
-    "Configuration error",
-    "Third-party dependency",
-    "Other",
+    "Missing Validation",
+    "DC Pipeline Issue",
+    "Frontend Issue (Tableau)",
+    "Backend Issue (dbt)",
+    "Configuration Issue",
   ];
   const bugBlocks = bugTasks.map(b => {
     const name = b.name.replace(/BUG:\s*/i,"");
@@ -318,7 +313,7 @@ function buildHtml(sprints, bugTasks, { month, yourName, managerName }) {
             </select>
           </div>
         </div>
-        <div class="bug-ann-grid">
+        <div class="bug-ann-stack">
           <div class="ann-block bug-ann-block">
             <div class="ann-label bug-ann-label">
               <span class="ann-icon bug-ann-icon">&#9998;</span>
@@ -448,7 +443,7 @@ tr:hover td{background:#f8fafc}
 .bug-cat-wrap{display:inline-block}
 .ann-sel{font-size:12px;padding:5px 10px;border-radius:6px;border:1px solid #c4b5fd;background:#f5f3ff;color:#4c1d95;font-family:'Inter',sans-serif;cursor:pointer;outline:none;min-width:200px}
 .ann-sel:focus{border-color:#7c3aed}
-.bug-ann-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px}
+.bug-ann-stack{display:flex;flex-direction:column;gap:8px;margin-top:10px}
 .overall-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:14px}
 .overall-card{background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:14px 16px}
 .oc-title{font-size:9px;font-family:'DM Mono',monospace;color:#94a3b8;text-transform:uppercase;letter-spacing:.8px;margin-bottom:8px}
