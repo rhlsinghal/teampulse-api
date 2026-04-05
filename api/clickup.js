@@ -292,6 +292,28 @@ function buildHtml(sprints, bugTasks, { month, yourName, managerName }) {
     "Backend Issue (dbt)",
     "Configuration Issue",
   ];
+  // ── Bug filter helpers ────────────────────────────────────────────────────
+  const CLOSED_STATUSES_M = ["completed","closed","done","resolved","user error","accepted","released","deployed","finished"];
+  const getBugFilterKeyM = (b) => {
+    const s = b.status.toLowerCase().trim();
+    if(CLOSED_STATUSES_M.some(c => s === c || s.startsWith(c))) return "closed-completed";
+    return s.replace(/\s+/g,"-");
+  };
+  const bugStatusLabelM = (b) => {
+    const key = getBugFilterKeyM(b);
+    if(key === "closed-completed")                return `<span class="pill pill-grn">${b.status}</span>`;
+    if(b.status.toLowerCase().includes("review")) return `<span class="pill pill-amb">${b.status}</span>`;
+    return `<span class="pill pill-red">${b.status}</span>`;
+  };
+  const bugRowHtmlM = (b) => `
+    <div class="bug-row" data-status="${getBugFilterKeyM(b)}">
+      <a class="bug-id" href="${b.url}" target="_blank">${b.customId}</a>
+      <div class="bug-info">
+        <div class="bug-name">${b.name.replace(/BUG:\s*/i,"").slice(0,60)}</div>
+        <div class="bug-meta">${bugStatusLabelM(b)}</div>
+      </div>
+    </div>`;
+
   const bugBlocks = bugTasks.map(b => {
     const name = b.name.replace(/BUG:\s*/i,"");
     return `
@@ -342,28 +364,6 @@ function buildHtml(sprints, bugTasks, { month, yourName, managerName }) {
         </div>
       </div>`;
   }).join("\n");
-
-  // ── Quarterly-style bug helpers (reused in monthly) ───────────────────────
-  const CLOSED_STATUSES_M = ["completed","closed","done","resolved","user error","accepted","released","deployed","finished"];
-  const getBugFilterKeyM = (b) => {
-    const s = b.status.toLowerCase().trim();
-    if(CLOSED_STATUSES_M.some(c => s === c || s.startsWith(c))) return "closed-completed";
-    return s.replace(/\s+/g,"-");
-  };
-  const bugStatusLabelM = (b) => {
-    const key = getBugFilterKeyM(b);
-    if(key === "closed-completed")              return `<span class="pill pill-grn">${b.status}</span>`;
-    if(b.status.toLowerCase().includes("review")) return `<span class="pill pill-amb">${b.status}</span>`;
-    return `<span class="pill pill-red">${b.status}</span>`;
-  };
-  const bugRowHtmlM = (b) => `
-    <div class="bug-row" data-status="${getBugFilterKeyM(b)}">
-      <a class="bug-id" href="${b.url}" target="_blank">${b.customId}</a>
-      <div class="bug-info">
-        <div class="bug-name">${b.name.replace(/BUG:\s*/i,"").slice(0,60)}</div>
-        <div class="bug-meta">${bugStatusLabelM(b)}</div>
-      </div>
-    </div>`;
 
   // ── Overall summary ──
   const completionSummary = sprints.map(s => {
