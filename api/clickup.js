@@ -500,7 +500,11 @@ tr:hover td{background:#f8fafc}
 .footer-left strong{color:#4f46e5}
 .footer-sign{font-size:12px;color:#64748b}
 .footer-sign strong{color:#1e293b;font-weight:500}
-@media print{body{padding:0;background:#fff}.wrapper{border-radius:0;border:none}.ann-block,.deploy-flag,.bug-ann-block{-webkit-print-color-adjust:exact;print-color-adjust:exact}}`;
+@media print{body{padding:0;background:#fff}.wrapper{border-radius:0;border:none}.ann-block,.deploy-flag,.bug-ann-block{-webkit-print-color-adjust:exact;print-color-adjust:exact}}
+.m-card{background:#fff;border:1px solid #e2e8f0;border-radius:12px;overflow:hidden}
+.m-ch{padding:10px 14px;border-bottom:1px solid #e2e8f0;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px}
+.m-ct{font-size:13px;font-weight:600;color:#1e293b}
+.m-cbadge{font-size:10px;padding:2px 9px;border-radius:20px;font-weight:500;background:#FCEBEB;color:#791F1F;border:1px solid #F7C1C1}`;
 
   return `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>iDerive Monthly Update — ${month}</title>
@@ -541,22 +545,30 @@ tr:hover td{background:#f8fafc}
       <span class="section-title">Bug tracking — ${month} (DT assignees only)</span>
       <span class="section-badge amber">${bugTasks.length} DT bugs</span>
     </div>
-    <div class="bug-filters" style="margin:10px 0 12px">
-      <button class="bf-btn bf-active" onclick="bugFilterM('all')">All (${bugTasks.length})</button>
-      ${(() => {
-        const seen = new Map();
-        bugTasks.forEach(b => {
-          const key = getBugFilterKeyM(b);
-          const label = b.status;
-          if(!seen.has(key)) seen.set(key, { label, count: 0 });
-          seen.get(key).count++;
-        });
-        return [...seen.entries()].map(([key, {label, count}]) =>
-          `<button class="bf-btn" onclick="bugFilterM('${key}')">${label} (${count})</button>`
-        ).join("");
-      })()}
+    <div class="m-card" style="margin-top:10px">
+      <div class="m-ch">
+        <span class="m-ct">All DT bugs this month</span>
+        <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+          <span class="m-cbadge">${bugTasks.length} bugs · ${resolved.length} resolved</span>
+          <div class="bug-filters">
+            <button class="bf-btn bf-active" onclick="bugFilterM('all')">All (${bugTasks.length})</button>
+            ${(() => {
+              const seen = new Map();
+              bugTasks.forEach(b => {
+                const key = getBugFilterKeyM(b);
+                const label = b.status;
+                if(!seen.has(key)) seen.set(key, { label, count: 0 });
+                seen.get(key).count++;
+              });
+              return [...seen.entries()].map(([key, {label, count}]) =>
+                `<button class="bf-btn" onclick="bugFilterM('${key}')">${label} (${count})</button>`
+              ).join("");
+            })()}
+          </div>
+        </div>
+      </div>
+      <div id="bug-list-m"><div class="bug-outer">${bugBlocks}</div></div>
     </div>
-    <div id="bug-list-m"><div class="bug-outer">${bugBlocks}</div></div>
     <div class="prog-grid" style="margin-top:10px">
       <div><div class="prog-label">Resolved</div><div class="prog-bar-bg"><div class="prog-bar-fill fill-green" style="width:${bugResPct}%"></div></div><div class="prog-val">${resolved.length} bugs (${bugResPct}%)</div></div>
       <div><div class="prog-label">Under review</div><div class="prog-bar-bg"><div class="prog-bar-fill fill-amber" style="width:${bugTasks.length?Math.round(review.length/bugTasks.length*100):0}%"></div></div><div class="prog-val">${review.length} bugs</div></div>
