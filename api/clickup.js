@@ -295,7 +295,7 @@ function buildHtml(sprints, bugTasks, { month, yourName, managerName }) {
   const bugBlocks = bugTasks.map(b => {
     const name = b.name.replace(/BUG:\s*/i,"");
     return `
-      <div class="bug-block">
+      <div class="bug-block" data-status="${getBugFilterKeyM(b)}">
         <div class="bug-top">
           <a class="task-id" href="${b.url}" target="_blank">${b.customId}</a>
           <a class="task-name-link" href="${b.url}" target="_blank">${name}</a>
@@ -342,6 +342,28 @@ function buildHtml(sprints, bugTasks, { month, yourName, managerName }) {
         </div>
       </div>`;
   }).join("\n");
+
+  // ── Quarterly-style bug helpers (reused in monthly) ───────────────────────
+  const CLOSED_STATUSES_M = ["completed","closed","done","resolved","user error","accepted","released","deployed","finished"];
+  const getBugFilterKeyM = (b) => {
+    const s = b.status.toLowerCase().trim();
+    if(CLOSED_STATUSES_M.some(c => s === c || s.startsWith(c))) return "closed-completed";
+    return s.replace(/\s+/g,"-");
+  };
+  const bugStatusLabelM = (b) => {
+    const key = getBugFilterKeyM(b);
+    if(key === "closed-completed")              return `<span class="pill pill-grn">${b.status}</span>`;
+    if(b.status.toLowerCase().includes("review")) return `<span class="pill pill-amb">${b.status}</span>`;
+    return `<span class="pill pill-red">${b.status}</span>`;
+  };
+  const bugRowHtmlM = (b) => `
+    <div class="bug-row" data-status="${getBugFilterKeyM(b)}">
+      <a class="bug-id" href="${b.url}" target="_blank">${b.customId}</a>
+      <div class="bug-info">
+        <div class="bug-name">${b.name.replace(/BUG:\s*/i,"").slice(0,60)}</div>
+        <div class="bug-meta">${bugStatusLabelM(b)}</div>
+      </div>
+    </div>`;
 
   // ── Overall summary ──
   const completionSummary = sprints.map(s => {
@@ -519,7 +541,22 @@ tr:hover td{background:#f8fafc}
       <span class="section-title">Bug tracking — ${month} (DT assignees only)</span>
       <span class="section-badge amber">${bugTasks.length} DT bugs</span>
     </div>
-    <div class="bug-outer">${bugBlocks}</div>
+    <div class="bug-filters" style="margin:10px 0 12px">
+      <button class="bf-btn bf-active" onclick="bugFilterM('all')">All (${bugTasks.length})</button>
+      ${(() => {
+        const seen = new Map();
+        bugTasks.forEach(b => {
+          const key = getBugFilterKeyM(b);
+          const label = b.status;
+          if(!seen.has(key)) seen.set(key, { label, count: 0 });
+          seen.get(key).count++;
+        });
+        return [...seen.entries()].map(([key, {label, count}]) =>
+          `<button class="bf-btn" onclick="bugFilterM('${key}')">${label} (${count})</button>`
+        ).join("");
+      })()}
+    </div>
+    <div id="bug-list-m"><div class="bug-outer">${bugBlocks}</div></div>
     <div class="prog-grid" style="margin-top:10px">
       <div><div class="prog-label">Resolved</div><div class="prog-bar-bg"><div class="prog-bar-fill fill-green" style="width:${bugResPct}%"></div></div><div class="prog-val">${resolved.length} bugs (${bugResPct}%)</div></div>
       <div><div class="prog-label">Under review</div><div class="prog-bar-bg"><div class="prog-bar-fill fill-amber" style="width:${bugTasks.length?Math.round(review.length/bugTasks.length*100):0}%"></div></div><div class="prog-val">${review.length} bugs</div></div>
@@ -650,6 +687,18 @@ function bugFilter(type) {
   if(col1 && col2) {
     visible.forEach(function(r, i){ (i < half ? col1 : col2).appendChild(r); });
   }
+}
+</script>
+<script>
+function bugFilterM(type) {
+  var blocks = document.querySelectorAll("#bug-list-m .bug-block");
+  blocks.forEach(function(b) {
+    var status = b.getAttribute("data-status");
+    b.style.display = (type === "all" || status === type) ? "" : "none";
+  });
+  document.querySelectorAll(".bf-btn").forEach(function(btn) {
+    btn.classList.toggle("bf-active", btn.getAttribute("onclick") === "bugFilterM('" + type + "')");
+  });
 }
 </script>
 </body></html>`;
