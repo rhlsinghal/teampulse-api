@@ -1232,6 +1232,22 @@ export default async function handler(req, res) {
       ? buildQuarterlyHtml(sprints, bugTasks, { quarter: quarterLabel, yourName, managerName })
       : buildHtml(sprints, bugTasks, { month: reportMonth, yourName, managerName });
 
+    // Build rawData for Excel export — each sprint's full task arrays + bug tasks
+    const rawData = {
+      sprints: sprints.map(s => ({
+        label:      s.label,
+        num:        s.num,
+        startDate:  s.startDate ? new Date(s.startDate).toLocaleDateString("en-GB") : "",
+        dueDate:    s.dueDate   ? new Date(s.dueDate).toLocaleDateString("en-GB")   : "",
+        dt_tasks:   s.dt_tasks   || [],
+        done_dt:    s.done_dt    || [],
+        open_dt:    s.open_dt    || [],
+        blocked_dt: s.blocked_dt || [],
+        next_sprint_deploy_task: s.next_sprint_deploy_task || null,
+      })),
+      bugs: bugTasks,
+    };
+
     res.status(200).json({
       html,
       sprints:     sprints.length,
@@ -1239,6 +1255,7 @@ export default async function handler(req, res) {
       month:       reportMonth,
       quarter:     isQuarterly ? quarterLabel : null,
       sprintNames,
+      rawData,
     });
 
   } catch(e){
